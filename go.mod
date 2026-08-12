@@ -1,4 +1,4 @@
-module kandev-plugin-template
+module kandev-plugin-voice
 
 go 1.26.0
 

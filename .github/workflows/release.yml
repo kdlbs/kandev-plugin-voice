@@ -111,7 +111,7 @@ jobs:
           set -euo pipefail
           sed -i -E "s/^version: \"[0-9]+\.[0-9]+\.[0-9]+\"$/version: \"$VERSION\"/" manifest.yaml
           sed -i -E "s/^VERSION := [0-9]+\.[0-9]+\.[0-9]+$/VERSION := $VERSION/" Makefile
-          sed -i -E "s/kandev-plugin-template-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz/kandev-plugin-template-$VERSION.tar.gz/" README.md
+          sed -i -E "s/kandev-plugin-voice-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz/kandev-plugin-voice-$VERSION.tar.gz/" README.md
 
           RANGE="${PREVIOUS_TAG:+$PREVIOUS_TAG..}HEAD"
           CHANGES="$(git log --no-merges --format='- %s (%h)' "$RANGE")"
@@ -173,6 +173,20 @@ jobs:
           go-version-file: plugin/go.mod
           cache-dependency-path: plugin/go.sum
 
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: 10
+
+      - name: Install UI dependencies
+        working-directory: plugin
+        run: make ui-install
+
       - name: Verify
         working-directory: plugin
         run: |
@@ -186,13 +200,13 @@ jobs:
 
       - name: Extract checksums
         working-directory: plugin
-        run: tar -xzf kandev-plugin-template-*.tar.gz checksums.txt
+        run: tar -xzf kandev-plugin-voice-*.tar.gz checksums.txt
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ github.event_name == 'push' && github.ref_name || needs.prepare.outputs.tag }}
           files: |
-            plugin/kandev-plugin-template-*.tar.gz
+            plugin/kandev-plugin-voice-*.tar.gz
             plugin/checksums.txt
           generate_release_notes: true

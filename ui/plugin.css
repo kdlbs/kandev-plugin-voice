@@ -1,0 +1,150 @@
+/* kandev-plugin-voice
+ *
+ * The plugin styles itself rather than reaching for kandev's Tailwind
+ * utilities. Tailwind v4 compiles only the classes it finds while scanning
+ * kandev's own sources (see the @source lines in apps/web/app/globals.css),
+ * and this bundle is not scanned: any utility that happens to work today
+ * would silently stop the moment kandev's last use of it is deleted.
+ *
+ * Colors come from kandev's own CSS custom properties, so light, dark and
+ * every custom theme follow automatically.
+ */
+
+.kv-action {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* The host Button already supplies the ghost variant's colors and focus
+ * ring; these rules only fix the size and the recording treatment. */
+.kv-btn {
+  position: relative;
+  height: 1.75rem;
+  width: 1.75rem;
+  cursor: pointer;
+  user-select: none;
+  color: var(--muted-foreground);
+}
+
+.kv-btn:hover:not(:disabled) {
+  color: var(--foreground);
+}
+
+/* 40px on touch: the smallest comfortable target, without loosening the
+ * dense desktop toolbar it sits in. */
+.kv-btn--touch {
+  height: 2.5rem;
+  width: 2.5rem;
+}
+
+.kv-btn--recording,
+.kv-btn--recording:hover:not(:disabled) {
+  color: var(--destructive);
+  background-color: color-mix(in oklab, var(--destructive) 15%, transparent);
+}
+
+.kv-btn--unsupported {
+  color: color-mix(in oklab, var(--muted-foreground) 40%, transparent);
+}
+
+.kv-btn--unsupported:hover:not(:disabled) {
+  color: var(--muted-foreground);
+}
+
+.kv-pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--destructive) 40%, transparent);
+  animation: kv-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes kv-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kv-pulse-ring {
+    animation: none;
+  }
+  .kv-spin {
+    animation: none;
+  }
+}
+
+.kv-spin {
+  animation: kv-rotate 1s linear infinite;
+}
+
+@keyframes kv-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.kv-icon {
+  height: 1rem;
+  width: 1rem;
+}
+
+.kv-icon--stop {
+  height: 0.875rem;
+  width: 0.875rem;
+}
+
+/* Model download progress, shown beside the button while a Whisper model is
+ * being fetched for the first time. */
+.kv-model-load {
+  display: flex;
+  width: 6rem;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.kv-model-load__bar {
+  height: 0.25rem;
+}
+
+.kv-model-load__pct {
+  font-size: 0.625rem;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+/* Settings page */
+.kv-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.kv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.kv-field__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.kv-help {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  margin: 0;
+}
+
+.kv-cursor-pointer {
+  cursor: pointer;
+}

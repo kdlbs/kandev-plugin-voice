@@ -51,6 +51,35 @@ jobs:
         working-directory: plugin
         run: make vet
 
-      - name: Test
+      - name: Test the backend
         working-directory: plugin
-        run: make test
+        run: make test-go
+
+      # The UI half is an esbuild bundle with its own vitest suite. It is
+      # checked here rather than in a separate workflow so a PR cannot land a
+      # bundle that no longer typechecks against the manifest it ships with.
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: 10
+
+      - name: Install UI dependencies
+        working-directory: plugin
+        run: make ui-install
+
+      - name: Typecheck the UI
+        working-directory: plugin
+        run: make typecheck
+
+      - name: Test the UI
+        working-directory: plugin
+        run: make test-ui
+
+      - name: Build the UI bundle
+        working-directory: plugin
+        run: make ui

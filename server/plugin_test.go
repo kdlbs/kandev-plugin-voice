@@ -1,167 +1,292 @@
-// Package main tests. Exercises templatePlugin's Plugin methods (OnEvent,
-// InvokeTool, HandleWebhook) via direct calls against a fakeHost — no
-// go-plugin subprocess needed. This is the fast, hermetic way to test a
-// kandev plugin's backend half; copy the fakeHost pattern for your own tests.
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"sync"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/kandev/kandev/pkg/pluginsdk"
 	"github.com/stretchr/testify/require"
 )
 
-// fakeHost is an in-memory pluginsdk.Host test double that actually stores
-// state (unlike a call-recording spy), so tests can assert the
-// get-then-increment-then-set round trip. SetState round-trips values through
-// JSON, mirroring the real Host's protobuf Struct conversion: numbers always
-// come back as float64, never the original Go numeric type — a fake that just
-// stored the raw Go value would hide bugs like reading a JSON number as int.
-// UnimplementedHostData satisfies the Host data API accessors this plugin
-// doesn't use.
-type fakeHost struct {
-	pluginsdk.UnimplementedHostData
-	mu     sync.Mutex
-	state  map[string]map[string]any
-	config map[string]any
-}
-
-func newFakeHost() *fakeHost {
-	return &fakeHost{state: make(map[string]map[string]any)}
-}
-
-func stateKey(scope, scopeID, key string) string {
-	return scope + "/" + scopeID + "/" + key
-}
-
-func (h *fakeHost) GetState(_ context.Context, scope, scopeID, key string) (map[string]any, bool, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	v, ok := h.state[stateKey(scope, scopeID, key)]
-	return v, ok, nil
-}
-
-func (h *fakeHost) SetState(_ context.Context, scope, scopeID, key string, value map[string]any) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.state[stateKey(scope, scopeID, key)] = jsonRoundTrip(value)
-	return nil
-}
-
-// jsonRoundTrip marshals v to JSON and back into map[string]any, so numeric
-// values normalize to float64 exactly like structpb.Struct.AsMap() does on
-// the real wire.
-func jsonRoundTrip(v map[string]any) map[string]any {
-	data, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
+// audioUpload builds the multipart body the plugin UI posts, and returns it
+// with the Content-Type header (carrying the boundary) kandev relays verbatim.
+func audioUpload(t *testing.T, field, filename, mimeType string, payload []byte) ([]byte, string) {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	w := multipart.NewWriter(buf)
+	part, err := w.CreateFormFile(field, filename)
+	require.NoError(t, err)
+	_, err = part.Write(payload)
+	require.NoError(t, err)
+	if mimeType != "" {
+		require.NoError(t, w.WriteField("mime", mimeType))
 	}
-	var out map[string]any
-	if err := json.Unmarshal(data, &out); err != nil {
-		panic(err)
+	require.NoError(t, w.Close())
+	return buf.Bytes(), w.FormDataContentType()
+}
+
+func transcribeRequest(body []byte, contentType string) *pluginsdk.WebhookRequest {
+	return &pluginsdk.WebhookRequest{
+		WebhookKey: "transcribe",
+		Method:     http.MethodPost,
+		Headers:    map[string]string{"Content-Type": contentType},
+		Body:       body,
 	}
+}
+
+// upstreamStub stands in for OpenAI. It records the request it saw so tests
+// can assert what the plugin forwarded.
+type upstreamStub struct {
+	server        *httptest.Server
+	authorization string
+	model         string
+	filename      string
+	fileBytes     []byte
+}
+
+func newUpstreamStub(t *testing.T, status int, responseBody string) *upstreamStub {
+	t.Helper()
+	stub := &upstreamStub{}
+	stub.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stub.authorization = r.Header.Get("Authorization")
+		require.NoError(t, r.ParseMultipartForm(32<<20))
+		stub.model = r.FormValue("model")
+		file, header, err := r.FormFile("file")
+		if err == nil {
+			defer func() { _ = file.Close() }()
+			stub.filename = header.Filename
+			buf := &bytes.Buffer{}
+			_, _ = buf.ReadFrom(file)
+			stub.fileBytes = buf.Bytes()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(responseBody))
+	}))
+	t.Cleanup(stub.server.Close)
+	return stub
+}
+
+func configuredPlugin(t *testing.T, stub *upstreamStub, extra map[string]any) *voicePlugin {
+	t.Helper()
+	config := map[string]any{"openai_api_key": "sk-test-key"}
+	if stub != nil {
+		config["openai_base_url"] = stub.server.URL
+	}
+	for k, v := range extra {
+		config[k] = v
+	}
+	p := &voicePlugin{httpClient: &http.Client{}}
+	p.SetHost(newFakeHost(config))
+	return p
+}
+
+func decodeBody(t *testing.T, resp *pluginsdk.WebhookResponse) map[string]string {
+	t.Helper()
+	var out map[string]string
+	require.NoError(t, json.Unmarshal(resp.Body, &out))
 	return out
 }
 
-func (h *fakeHost) DeleteState(context.Context, string, string, string) error { return nil }
+func TestHandleWebhook_RelaysAudioAndReturnsTranscript(t *testing.T) {
+	stub := newUpstreamStub(t, http.StatusOK, `{"text":"  ship the release  "}`)
+	p := configuredPlugin(t, stub, nil)
+	body, contentType := audioUpload(t, audioFormField, "recording.webm", "", []byte("fake-opus-bytes"))
 
-func (h *fakeHost) ListState(context.Context, string, string) ([]pluginsdk.StateEntry, error) {
-	return nil, nil
+	resp, err := p.HandleWebhook(context.Background(), transcribeRequest(body, contentType))
+
+	require.NoError(t, err)
+	require.Equal(t, int32(http.StatusOK), resp.Status)
+	require.Equal(t, "ship the release", decodeBody(t, resp)["text"])
+	require.Equal(t, "Bearer sk-test-key", stub.authorization)
+	require.Equal(t, "whisper-1", stub.model)
+	require.Equal(t, "recording.webm", stub.filename)
+	require.Equal(t, []byte("fake-opus-bytes"), stub.fileBytes)
 }
 
-// GetConfig returns the operator-saved settings the real Host reads from
-// kandev's plugin config store.
-func (h *fakeHost) GetConfig(context.Context) (map[string]any, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.config == nil {
-		return map[string]any{}, nil
+func TestHandleWebhook_UsesOperatorModelOverride(t *testing.T) {
+	stub := newUpstreamStub(t, http.StatusOK, `{"text":"hi"}`)
+	p := configuredPlugin(t, stub, map[string]any{"openai_model": "gpt-4o-transcribe"})
+	body, contentType := audioUpload(t, audioFormField, "recording.webm", "", []byte("bytes"))
+
+	_, err := p.HandleWebhook(context.Background(), transcribeRequest(body, contentType))
+
+	require.NoError(t, err)
+	require.Equal(t, "gpt-4o-transcribe", stub.model)
+}
+
+func TestHandleWebhook_WithoutKeyReturns503AndNeverCallsUpstream(t *testing.T) {
+	stub := newUpstreamStub(t, http.StatusOK, `{"text":"should not happen"}`)
+	p := &voicePlugin{httpClient: &http.Client{}}
+	p.SetHost(newFakeHost(map[string]any{"openai_base_url": stub.server.URL}))
+	body, contentType := audioUpload(t, audioFormField, "recording.webm", "", []byte("bytes"))
+
+	resp, err := p.HandleWebhook(context.Background(), transcribeRequest(body, contentType))
+
+	require.NoError(t, err)
+	require.Equal(t, int32(http.StatusServiceUnavailable), resp.Status)
+	require.Empty(t, stub.authorization, "unconfigured relay must not reach the upstream")
+}
+
+func TestHandleWebhook_WithoutHostReturns503(t *testing.T) {
+	p := &voicePlugin{}
+	body, contentType := audioUpload(t, audioFormField, "recording.webm", "", []byte("bytes"))
+
+	resp, err := p.HandleWebhook(context.Background(), transcribeRequest(body, contentType))
+
+	require.NoError(t, err)
+	require.Equal(t, int32(http.StatusServiceUnavailable), resp.Status)
+}
+
+func TestHandleWebhook_ConfigErrorReturns503(t *testing.T) {
+	p := &voicePlugin{}
+	host := newFakeHost(nil)
+	host.configErr = errors.New("config store unavailable")
+	p.SetHost(host)
+	body, contentType := audioUpload(t, audioFormField, "recording.webm", "", []byte("bytes"))
+
+	resp, err := p.HandleWebhook(context.Background(), transcribeRequest(body, contentType))
+
+	require.NoError(t, err)
+	require.Equal(t, int32(http.StatusServiceUnavailable), resp.Status)
+}
+
+func TestHandleWebhook_UpstreamFailureIsNotEchoedToTheBrowser(t *testing.T) {
+	stub := newUpstreamStub(t, http.StatusUnauthorized,
+		`{"error":{"message":"Incorrect API key provided: sk-test-key"}}`)
+	p := configuredPlugin(t, stub, nil)
+	body, contentType := audioUpload(t, audioFormField, "recording.webm", "", []byte("bytes"))
+
+	resp, err := p.HandleWebhook(context.Background(), transcribeRequest(body, contentType))
+
+	require.NoError(t, err)
+	require.Equal(t, int32(http.StatusBadGateway), resp.Status)
+	require.Equal(t, "upstream transcription error", decodeBody(t, resp)["error"])
+	require.NotContains(t, string(resp.Body), "sk-test-key")
+}
+
+func TestHandleWebhook_RejectsUnknownKey(t *testing.T) {
+	p := configuredPlugin(t, nil, nil)
+
+	resp, err := p.HandleWebhook(context.Background(), &pluginsdk.WebhookRequest{
+		WebhookKey: "exfiltrate",
+		Method:     http.MethodPost,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, int32(http.StatusNotFound), resp.Status)
+}
+
+func TestHandleWebhook_RejectsNonPost(t *testing.T) {
+	p := configuredPlugin(t, nil, nil)
+
+	resp, err := p.HandleWebhook(context.Background(), &pluginsdk.WebhookRequest{
+		WebhookKey: "transcribe",
+		Method:     http.MethodGet,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, int32(http.StatusMethodNotAllowed), resp.Status)
+}
+
+func TestHandleWebhook_MalformedBodiesReturn400(t *testing.T) {
+	stub := newUpstreamStub(t, http.StatusOK, `{"text":"nope"}`)
+	body, contentType := audioUpload(t, audioFormField, "recording.webm", "", []byte("bytes"))
+	wrongField, wrongFieldType := audioUpload(t, "attachment", "recording.webm", "", []byte("bytes"))
+
+	cases := []struct {
+		name        string
+		contentType string
+		body        []byte
+	}{
+		{"no content type", "", body},
+		{"not multipart", "application/json", []byte(`{"audio":"..."}`)},
+		{"multipart without boundary", "multipart/form-data", body},
+		{"truncated multipart", contentType, body[:len(body)/2]},
+		{"wrong field name", wrongFieldType, wrongField},
 	}
-	return h.config, nil
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := configuredPlugin(t, stub, nil)
+			resp, err := p.HandleWebhook(context.Background(), transcribeRequest(tc.body, tc.contentType))
+			require.NoError(t, err)
+			require.Equal(t, int32(http.StatusBadRequest), resp.Status)
+		})
+	}
 }
 
-func (h *fakeHost) RevealSecret(context.Context, string) (string, error) { return "", nil }
+func TestHandleWebhook_EmptyAudioReturns400(t *testing.T) {
+	stub := newUpstreamStub(t, http.StatusOK, `{"text":"nope"}`)
+	p := configuredPlugin(t, stub, nil)
+	body, contentType := audioUpload(t, audioFormField, "recording.webm", "", nil)
 
-func (h *fakeHost) GetSecret(context.Context, string) (string, bool, error) {
-	return "", false, nil
-}
-func (h *fakeHost) SetSecret(context.Context, string, string) error { return nil }
-func (h *fakeHost) DeleteSecret(context.Context, string) error      { return nil }
+	resp, err := p.HandleWebhook(context.Background(), transcribeRequest(body, contentType))
 
-func (h *fakeHost) EmitEvent(context.Context, string, map[string]any) error { return nil }
-
-var _ pluginsdk.Host = (*fakeHost)(nil)
-
-func TestOnEvent_NoHost_ReturnsNilWithoutPanicking(t *testing.T) {
-	p := &templatePlugin{}
-	err := p.OnEvent(context.Background(), &pluginsdk.Event{EventID: "e1", EventType: "task.created"})
 	require.NoError(t, err)
+	require.Equal(t, int32(http.StatusBadRequest), resp.Status)
+	require.Empty(t, stub.fileBytes)
 }
 
-func TestOnEvent_IncrementsEventCountViaHostState(t *testing.T) {
-	p := &templatePlugin{}
-	host := newFakeHost()
-	p.SetHost(host)
+func TestHandleWebhook_OversizedAudioReturns413WithoutBufferingUpstream(t *testing.T) {
+	stub := newUpstreamStub(t, http.StatusOK, `{"text":"nope"}`)
+	p := configuredPlugin(t, stub, nil)
+	body, contentType := audioUpload(t, audioFormField, "recording.wav", "",
+		bytes.Repeat([]byte("a"), maxAudioBytes+1))
 
-	require.NoError(t, p.OnEvent(context.Background(), &pluginsdk.Event{EventID: "e1", EventType: "task.created"}))
-	value, found, err := host.GetState(context.Background(), "instance", "", eventCountStateKey)
+	resp, err := p.HandleWebhook(context.Background(), transcribeRequest(body, contentType))
+
 	require.NoError(t, err)
-	require.True(t, found)
-	require.InEpsilon(t, float64(1), value["count"], 0)
+	require.Equal(t, int32(http.StatusRequestEntityTooLarge), resp.Status)
+	require.Empty(t, stub.authorization, "an oversized payload must not reach the upstream")
+}
 
-	require.NoError(t, p.OnEvent(context.Background(), &pluginsdk.Event{EventID: "e2", EventType: "task.created"}))
-	value, found, err = host.GetState(context.Background(), "instance", "", eventCountStateKey)
+func TestHandleWebhook_TenMiBUploadSucceeds(t *testing.T) {
+	stub := newUpstreamStub(t, http.StatusOK, `{"text":"long recording"}`)
+	p := configuredPlugin(t, stub, nil)
+	payload := bytes.Repeat([]byte("a"), 10<<20)
+	body, contentType := audioUpload(t, audioFormField, "recording.wav", "", payload)
+
+	resp, err := p.HandleWebhook(context.Background(), transcribeRequest(body, contentType))
+
 	require.NoError(t, err)
-	require.True(t, found)
-	require.InEpsilon(t, float64(2), value["count"], 0)
+	require.Equal(t, int32(http.StatusOK), resp.Status)
+	require.Len(t, stub.fileBytes, 10<<20)
 }
 
-// errHost fails every SetState call, to prove OnEvent surfaces a Host write
-// failure rather than silently swallowing it.
-type errHost struct {
-	fakeHost
+func TestHandleWebhook_HonoursContextCancellation(t *testing.T) {
+	stub := newUpstreamStub(t, http.StatusOK, `{"text":"too late"}`)
+	p := configuredPlugin(t, stub, nil)
+	body, contentType := audioUpload(t, audioFormField, "recording.webm", "", []byte("bytes"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	resp, err := p.HandleWebhook(ctx, transcribeRequest(body, contentType))
+
+	require.NoError(t, err)
+	require.Equal(t, int32(http.StatusInternalServerError), resp.Status)
 }
 
-func (h *errHost) SetState(context.Context, string, string, string, map[string]any) error {
-	return errors.New("boom")
-}
-
-func TestOnEvent_PropagatesHostSetStateError(t *testing.T) {
-	p := &templatePlugin{}
-	p.SetHost(&errHost{fakeHost: *newFakeHost()})
-
-	err := p.OnEvent(context.Background(), &pluginsdk.Event{EventID: "e1", EventType: "task.created"})
-	require.Error(t, err)
-}
-
-func TestHandleWebhook_DefaultGreetingWithoutHost(t *testing.T) {
-	p := &templatePlugin{}
+func TestHandleWebhook_FindsContentTypeRegardlessOfHeaderCase(t *testing.T) {
+	stub := newUpstreamStub(t, http.StatusOK, `{"text":"ok"}`)
+	p := configuredPlugin(t, stub, nil)
+	body, contentType := audioUpload(t, audioFormField, "recording.webm", "", []byte("bytes"))
 
 	resp, err := p.HandleWebhook(context.Background(), &pluginsdk.WebhookRequest{
-		WebhookKey: "ping",
-		Method:     "POST",
-		Body:       []byte(`{"ping":true}`),
+		WebhookKey: "transcribe",
+		Method:     strings.ToLower(http.MethodPost),
+		Headers:    map[string]string{"content-type": contentType},
+		Body:       body,
 	})
-	require.NoError(t, err)
-	require.Equal(t, int32(200), resp.Status)
-	require.Equal(t, "Hello, webhook!", string(resp.Body))
-}
 
-func TestHandleWebhook_UsesOperatorConfig(t *testing.T) {
-	p := &templatePlugin{}
-	host := newFakeHost()
-	host.config = map[string]any{"greeting": "Howdy", "api_token": "secret"}
-	p.SetHost(host)
-
-	resp, err := p.HandleWebhook(context.Background(), &pluginsdk.WebhookRequest{
-		WebhookKey: "ping",
-		Method:     "POST",
-	})
 	require.NoError(t, err)
-	require.Equal(t, int32(200), resp.Status)
-	require.Equal(t, "Howdy, webhook!", string(resp.Body))
+	require.Equal(t, int32(http.StatusOK), resp.Status)
 }
