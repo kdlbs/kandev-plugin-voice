@@ -1,26 +1,34 @@
-.PHONY: build run test fmt vet package package-host clean
+.PHONY: build ui ui-install test test-go test-ui typecheck fmt vet package package-host clean
 
-# When you rename the plugin, update BIN and VERSION to match manifest.yaml's
-# id and version (PKG_OUT is derived from them).
-BIN := bin/kandev-plugin-template
+BIN := bin/kandev-plugin-voice
 VERSION := 0.1.0
 STAGE := .build/stage
-PKG_OUT := kandev-plugin-template-$(VERSION).tar.gz
+PKG_OUT := kandev-plugin-voice-$(VERSION).tar.gz
 
 ## Build the plugin binary for the host platform (development use). kandev
-## itself always installs from `make package`/`package-host` output, not this.
+## installs from `make package`/`package-host` output, not this.
 build:
 	mkdir -p bin
 	go build -o $(BIN) ./server/...
 
-## Build + run. Mainly for -race / manual smoke checks: kandev normally spawns
-## this binary itself via the go-plugin handshake, so a manually-started
-## process has nothing to talk to on the other end.
-run: build
-	./$(BIN)
+## Install the UI toolchain. Needed once before `make ui`.
+ui-install:
+	cd ui && pnpm install --frozen-lockfile
 
-test:
+## Build ui/bundle.js and ui/whisper-worker.js with esbuild.
+ui:
+	cd ui && node build.mjs
+
+test: test-go test-ui
+
+test-go:
 	go test ./server/...
+
+test-ui:
+	cd ui && pnpm exec vitest run
+
+typecheck:
+	cd ui && pnpm exec tsc --noEmit
 
 fmt:
 	gofmt -l .
@@ -28,16 +36,17 @@ fmt:
 vet:
 	go vet ./server/...
 
-## Cross-compile server/plugin-<goos>-<goarch>[.exe] for every platform in
-## manifest.yaml's runtime.executables, stage manifest.yaml + ui/ alongside
-## them, and pack the tree into $(PKG_OUT) with
-## github.com/kandev/kandev/cmd/plugin-pack (resolved via the `replace` in
-## go.mod). Install the tarball via Settings > Plugins or curl -F package=@...
-package:
+## Stage manifest + built UI assets + server binaries, then pack with the
+## kandev plugin-pack CLI (resolved through this repo's go.mod `replace`).
+define stage_common
 	rm -rf $(STAGE)
-	mkdir -p $(STAGE)/server
+	mkdir -p $(STAGE)/server $(STAGE)/ui
 	cp manifest.yaml $(STAGE)/manifest.yaml
-	cp -r ui $(STAGE)/ui
+	cp ui/bundle.js ui/whisper-worker.js ui/plugin.css $(STAGE)/ui/
+endef
+
+package: ui
+	$(stage_common)
 	GOOS=linux   GOARCH=amd64 go build -o $(STAGE)/server/plugin-linux-amd64       ./server
 	GOOS=linux   GOARCH=arm64 go build -o $(STAGE)/server/plugin-linux-arm64       ./server
 	GOOS=darwin  GOARCH=amd64 go build -o $(STAGE)/server/plugin-darwin-amd64      ./server
@@ -47,17 +56,13 @@ package:
 	rm -rf $(STAGE)
 	@echo "Wrote $(PKG_OUT)"
 
-## Package for the host platform only — faster local iteration than the full
-## 5-platform `make package` (matches plugin-pack's -platform-only).
-package-host:
-	rm -rf $(STAGE)
-	mkdir -p $(STAGE)/server
-	cp manifest.yaml $(STAGE)/manifest.yaml
-	cp -r ui $(STAGE)/ui
+## Host platform only — faster local iteration than the full 5-platform build.
+package-host: ui
+	$(stage_common)
 	go build -o $(STAGE)/server/plugin-$$(go env GOOS)-$$(go env GOARCH)$$(go env GOEXE) ./server
 	go run github.com/kandev/kandev/cmd/plugin-pack -dir $(STAGE) -out $(PKG_OUT) -platform-only
 	rm -rf $(STAGE)
 	@echo "Wrote $(PKG_OUT)"
 
 clean:
-	rm -rf bin $(STAGE) kandev-plugin-template-*.tar.gz
+	rm -rf bin $(STAGE) ui/bundle.js ui/whisper-worker.js kandev-plugin-voice-*.tar.gz

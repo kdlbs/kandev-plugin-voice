@@ -1,0 +1,11 @@
+allowBuilds:
+  esbuild: set this to true or false
+  onnxruntime-node: set this to true or false
+  protobufjs: set this to true or false
+  sharp: set this to true or false
+# pnpm 11 reads build-script permissions from here, not package.json.
+# esbuild needs its postinstall to fetch the platform binary. onnxruntime-node
+# and sharp arrive with @huggingface/transformers for its Node target; the
+# browser build never loads them, so their build scripts stay off.
+onlyBuiltDependencies:
+  - esbuild
