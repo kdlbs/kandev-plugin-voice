@@ -15,7 +15,9 @@ import { host, maybeHost, type PluginStorageEntry } from "./host";
 
 export const SETTINGS_KEY = "voice-mode";
 const SETTINGS_SCOPE = "instance" as const;
-const SETTINGS_SCOPE_ID = "";
+// The instance scope still needs a path segment: kandev validates :scopeId
+// against ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$, so an empty string is a 400.
+export const SETTINGS_SCOPE_ID = "global";
 
 export type VoiceEngine = "auto" | "webSpeech" | "whisperWeb" | "whisperServer";
 export type VoiceActivationMode = "hold" | "toggle";

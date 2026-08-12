@@ -7,6 +7,7 @@ import {
   normalizeSettings,
   resetSettingsStore,
   SETTINGS_KEY,
+  SETTINGS_SCOPE_ID,
   startSettingsSync,
   subscribeSettings,
   updateSettings,
@@ -65,7 +66,7 @@ describe("loadSettings", () => {
   });
 
   it("reads a saved value once and shares it with concurrent callers", async () => {
-    host.storage.values.set(`instance//${SETTINGS_KEY}`, { engine: "whisperWeb" });
+    host.storage.values.set(`instance/${SETTINGS_SCOPE_ID}/${SETTINGS_KEY}`, { engine: "whisperWeb" });
 
     const [a, b] = await Promise.all([loadSettings(), loadSettings()]);
 
@@ -90,7 +91,7 @@ describe("updateSettings", () => {
 
     expect(getSettings().autoSend).toBe(true);
     expect(seen).toContain(true);
-    expect(host.storage.values.get(`instance//${SETTINGS_KEY}`)).toMatchObject({ autoSend: true });
+    expect(host.storage.values.get(`instance/${SETTINGS_SCOPE_ID}/${SETTINGS_KEY}`)).toMatchObject({ autoSend: true });
   });
 
   it("rolls the cache back when the write fails, so the UI never shows an unsaved value", async () => {
