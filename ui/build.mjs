@@ -8,8 +8,11 @@
 //                        the doubled segment)
 //
 // Contract requirements (docs/plans/plugins/PLUGIN-API.md):
-// - NO bundled React. Every `react` import — ours and @tabler/icons-react's —
-//   is aliased to src/react-shim.ts, which delegates to host.React.
+// - NO bundled React: every `react` import is aliased to src/react-shim.ts,
+//   which delegates to host.React. Nothing may touch React at module scope,
+//   because the bundle is evaluated before `initialize` hands us the host --
+//   that is why the icons are inlined rather than imported from a library
+//   that builds its components with forwardRef at import time.
 // - The automatic JSX runtime resolves through the same shim.
 //
 // The worker is the opposite case: it runs off the main thread with no host

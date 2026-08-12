@@ -34,7 +34,12 @@ export const plugin = {
     for (const slot of COMPOSER_SLOTS) {
       registry.registerComponent(slot, VoiceComposerAction);
     }
-    registry.registerSettingsRoute("", VoiceSettingsPage);
+    // The owner-scoped `plugin-settings` slot, not a settings route: kandev
+    // renders it inline at the top of this plugin's own page
+    // (Settings > Plugins > Voice Mode), right above the operator config form
+    // that holds the OpenAI key. A route would have to invent a URL and would
+    // sit somewhere the user has no reason to look.
+    registry.registerComponent("plugin-settings", VoiceSettingsPage);
     registry.registerKeybinding(TOGGLE_KEYBINDING_ID, (event) => {
       // Only claim the keypress when a composer actually took it. Returning
       // without acting lets whatever else is bound to the combo run.

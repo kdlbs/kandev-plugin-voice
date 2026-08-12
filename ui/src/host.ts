@@ -84,7 +84,6 @@ export interface PluginHostApi {
 
 export interface PluginRegistry {
   registerComponent(slot: string, Component: unknown): void;
-  registerSettingsRoute(path: string, Component: unknown): void;
   registerKeybinding(id: string, handler: (event: KeyboardEvent) => void): void;
 }
 

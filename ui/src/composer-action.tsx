@@ -8,7 +8,7 @@
  * tree. See the header comment in that file.
  */
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { IconLoader2, IconMicrophone, IconPlayerStopFilled } from "@tabler/icons-react";
+import { IconLoader, IconMicrophone, IconPlayerStopFilled } from "./icons";
 import { host, type PluginComposerSlotProps } from "./host";
 import { registerAction } from "./active-action";
 import { useDictation, useIsCoarsePointer, useVoiceSettings } from "./use-dictation";
@@ -56,7 +56,7 @@ function percent(progress: number): number {
 
 function ButtonIcon({ state, modelLoad }: { state: DictationState; modelLoad: ModelLoadState }) {
   if (state === "processing" || state === "requesting" || modelLoad.state === "loading") {
-    return <IconLoader2 className="kv-icon kv-spin" />;
+    return <IconLoader className="kv-icon kv-spin" />;
   }
   if (state === "recording") return <IconPlayerStopFilled className="kv-icon kv-icon--stop" />;
   return <IconMicrophone className="kv-icon" />;
