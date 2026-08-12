@@ -9,6 +9,12 @@ phone. Speak, and the transcript is inserted at your cursor. kandev keeps
 ownership of the draft and of submission throughout — the plugin never builds
 or sends a message itself.
 
+![The kandev chat composer with the dictation button beside the native controls](docs/media/composer.png)
+
+Press it and it records; press again and the transcript lands at the caret.
+
+![The composer while recording, the dictation button tinted and pulsing](docs/media/recording.png)
+
 This plugin was extracted from kandev core, which shipped Voice Mode until the
 composer capability and authenticated-webhook host APIs made a standalone
 plugin possible.
@@ -38,11 +44,31 @@ leaving a dead button.
 3. Each user picks their engine, language, activation style and auto-send under
    Settings → Plugins → Voice Mode. Those preferences are per-user, not shared.
 
+The key is an operator setting, rendered by kandev from the manifest's
+`config_schema` and stored in its encrypted vault. It never reaches the browser:
+the plugin's Go half relays the audio server-side.
+
+![The plugin's operator settings: OpenAI API key, endpoint and transcription model](docs/media/operator-key.png)
+
+Everything below that is per-user, and every control explains what it changes
+and what it costs:
+
+![Per-user Voice Mode settings: enable, engine, language, Whisper model, activation and auto-send](docs/media/settings.png)
+
 The dictation shortcut defaults to `Cmd/Ctrl+Shift+M` and is rebindable under
 Settings → Keyboard shortcuts like any other kandev shortcut. It is one of the
 few plugin bindings that fires while a composer has focus (manifest
 `allow_in_editor`), because dictating into the field you are typing in is the
 entire point.
+
+### On a phone
+
+Same capability, same composer, a 40px touch target. Hold-to-talk silently
+becomes press-to-toggle on a coarse pointer, because the platform reclaims a
+held finger for system gestures mid-sentence; your saved preference is left
+alone so docking a keyboard restores it.
+
+<img src="docs/media/recording-mobile.png" alt="The mobile composer while recording" width="420">
 
 ## Privacy and cost
 
