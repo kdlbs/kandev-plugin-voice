@@ -34,10 +34,10 @@ function Svg({ className, children }: IconProps & { children: unknown }) {
 export function IconMicrophone({ className }: IconProps) {
   return (
     <Svg className={className}>
-      <path d="M9 5a3 3 0 0 1 6 0v5a3 3 0 0 1 -6 0z" />
-      <path d="M5 10a7 7 0 0 0 14 0" />
-      <path d="M8 21h8" />
-      <path d="M12 17v4" />
+      <path key="microphone" d="M9 5a3 3 0 0 1 6 0v5a3 3 0 0 1 -6 0z" />
+      <path key="microphone-arc" d="M5 10a7 7 0 0 0 14 0" />
+      <path key="microphone-base" d="M8 21h8" />
+      <path key="microphone-stem" d="M12 17v4" />
     </Svg>
   );
 }
@@ -52,7 +52,7 @@ export function IconPlayerStopFilled({ className }: IconProps) {
       aria-hidden="true"
       className={className}
     >
-      <path d="M17 4h-10a3 3 0 0 0 -3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3 -3v-10a3 3 0 0 0 -3 -3z" />
+      <path key="stop" d="M17 4h-10a3 3 0 0 0 -3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3 -3v-10a3 3 0 0 0 -3 -3z" />
     </svg>
   );
 }
@@ -60,7 +60,7 @@ export function IconPlayerStopFilled({ className }: IconProps) {
 export function IconLoader({ className }: IconProps) {
   return (
     <Svg className={className}>
-      <path d="M12 3a9 9 0 1 0 9 9" />
+      <path key="loader" d="M12 3a9 9 0 1 0 9 9" />
     </Svg>
   );
 }

@@ -21,12 +21,24 @@ jobs:
         with:
           path: plugin
 
+      - name: Read pinned Kandev source revision
+        id: sdk
+        working-directory: plugin
+        run: |
+          set -euo pipefail
+          sdk_ref="$(cat .kandev-sdk-ref)"
+          [[ "$sdk_ref" =~ ^[0-9a-f]{40}$ ]]
+          echo "ref=$sdk_ref" >> "$GITHUB_OUTPUT"
+
       - name: Check out kandev SDK
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           repository: kdlbs/kandev
           path: kandev
-          sparse-checkout: apps/backend
+          ref: ${{ steps.sdk.outputs.ref }}
+          sparse-checkout: |
+            apps/backend
+            apps/packages/plugin-sdk
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -48,10 +60,10 @@ jobs:
         working-directory: plugin
         run: make ui-install
 
-      - name: Build host binary
+      - name: Verify the host-only package
         working-directory: plugin
-        run: make build
+        run: make verify-package-host
 
-      - name: Package all supported platforms
+      - name: Package and verify all declared platforms
         working-directory: plugin
-        run: make package
+        run: make verify-package

@@ -63,10 +63,10 @@ entire point.
 
 ### On a phone
 
-Same capability, same composer, a 40px touch target. Hold-to-talk silently
-becomes press-to-toggle on a coarse pointer, because the platform reclaims a
-held finger for system gestures mid-sentence; your saved preference is left
-alone so docking a keyboard restores it.
+The action stays beside the composer and uses the host's touch target. The
+host gives composer actions at least 44px of active height on phones. Hold-to-
+talk becomes press-to-toggle on phones and coarse pointers. The saved setting
+stays unchanged, so a docked keyboard restores hold-to-talk.
 
 <img src="docs/media/recording-mobile.png" alt="The mobile composer while recording" width="420">
 
@@ -102,31 +102,76 @@ use of it.
 
 ## Development
 
-The Go half builds against kandev's `pkg/pluginsdk`, which is not published as
-a standalone module yet, so `go.mod` resolves it through a sibling checkout:
+Use Node 24, pnpm 10 and Go 1.26. The Go backend and frontend types use the
+Kandev source revision in `.kandev-sdk-ref`. The Go SDK is not yet a separate
+module, so `go.mod` resolves it through a sibling checkout:
 
 ```text
 parent/
-├── kandev/                 # github.com/kdlbs/kandev
+├── kandev/                 # github.com/kdlbs/kandev at the pinned revision
 └── kandev-plugin-voice/    # this repo
 ```
 
+If the sibling checkout does not exist, clone Kandev beside this repository.
+Then set it to the revision in `.kandev-sdk-ref`:
+
 ```bash
-make ui-install       # once: install the UI toolchain
-make test             # Go tests + UI tests
-make typecheck        # tsc over ui/src
-make package-host     # build a tarball for this platform only
+git clone https://github.com/kdlbs/kandev.git ../kandev
+git -C ../kandev checkout "$(cat .kandev-sdk-ref)"
 ```
 
-Install the result into a **disposable** kandev instance:
+The UI imports frontend SDK types only. The build uses the React instance that
+Kandev provides.
+
+```bash
+corepack prepare pnpm@10 --activate
+make ui-install
+make check-format
+make vet
+make test
+make typecheck
+make ui
+make verify-package-host
+make verify-package
+```
+
+`make test` runs the Go tests, UI tests, and package-verifier tests. It also
+imports the built UI bundle into a disposable host fixture with fake speech
+recognition. `make typecheck` checks the UI types. The package targets check
+all five declared platform binaries, the UI bundle, the Whisper worker, the
+stylesheet, and the package checksums.
+
+## Package and release
+
+Use `make verify-package-host` for a local host archive. Use `make
+verify-package` for the full platform archive. Both commands build the UI and
+check the exact package contents and checksums.
+
+Install an archive into a **disposable** Kandev instance:
 
 ```bash
 curl -F package=@kandev-plugin-voice-0.1.0.tar.gz \
   http://localhost:8080/api/plugins/install
 ```
 
-kandev rejects reinstalling the same id and version, so bump
-`manifest.yaml`'s `version` (and the Makefile's `VERSION`) or uninstall first.
+Kandev rejects a second install with the same plugin ID and version. Uninstall
+the plugin before you reinstall that package.
+
+To publish a release, run the `release` workflow from `main`. Select a version
+bump and keep `dry_run` false. The workflow checks the UI, Go backend and full
+package before it commits release metadata and a version tag.
+
+The workflow also accepts a pushed `vMAJOR.MINOR.PATCH` tag. It checks that the
+tag, manifest, Makefile and package versions match before it creates a release.
+
+## Troubleshooting
+
+If the browser cannot access the microphone, open Kandev over HTTPS or use
+`http://localhost`. Browsers do not allow microphone access from an insecure
+page.
+
+If Server Whisper is unavailable, ask a Kandev operator to set the OpenAI API
+key in the plugin's operator settings. The browser engines do not need this key.
 
 ## License
 

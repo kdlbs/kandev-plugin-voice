@@ -23,12 +23,24 @@ jobs:
         with:
           path: plugin
 
+      - name: Read pinned Kandev source revision
+        id: sdk
+        working-directory: plugin
+        run: |
+          set -euo pipefail
+          sdk_ref="$(cat .kandev-sdk-ref)"
+          [[ "$sdk_ref" =~ ^[0-9a-f]{40}$ ]]
+          echo "ref=$sdk_ref" >> "$GITHUB_OUTPUT"
+
       - name: Check out kandev SDK
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           repository: kdlbs/kandev
           path: kandev
-          sparse-checkout: apps/backend
+          ref: ${{ steps.sdk.outputs.ref }}
+          sparse-checkout: |
+            apps/backend
+            apps/packages/plugin-sdk
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -44,20 +56,12 @@ jobs:
 
       - name: Check formatting
         working-directory: plugin
-        run: |
-          test -z "$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
+        run: make check-format
 
       - name: Vet
         working-directory: plugin
         run: make vet
 
-      - name: Test the backend
-        working-directory: plugin
-        run: make test-go
-
-      # The UI half is an esbuild bundle with its own vitest suite. It is
-      # checked here rather than in a separate workflow so a PR cannot land a
-      # bundle that no longer typechecks against the manifest it ships with.
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -72,14 +76,41 @@ jobs:
         working-directory: plugin
         run: make ui-install
 
+      - name: Test Go and UI behavior
+        working-directory: plugin
+        run: make test
+
       - name: Typecheck the UI
         working-directory: plugin
         run: make typecheck
 
-      - name: Test the UI
-        working-directory: plugin
-        run: make test-ui
-
       - name: Build the UI bundle
         working-directory: plugin
         run: make ui
+
+  base-floor:
+    name: Test backend at the minimum host SDK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out plugin
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          path: plugin
+
+      - name: Check out minimum Kandev SDK
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          repository: kdlbs/kandev
+          path: kandev
+          ref: v0.87.0
+          sparse-checkout: apps/backend
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: plugin/go.mod
+          cache-dependency-path: plugin/go.sum
+
+      - name: Test against the minimum host SDK
+        working-directory: plugin
+        run: make test-go
