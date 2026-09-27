@@ -102,7 +102,7 @@ jobs:
         with:
           repository: kdlbs/kandev
           path: kandev
-          ref: v0.88.0
+          ref: cab9eaf19d997bb4c8020dd263ddc60d5b035b64 # v0.88.0
           sparse-checkout: apps/backend
 
       - name: Set up Go

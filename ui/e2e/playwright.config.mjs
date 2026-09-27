@@ -6,9 +6,14 @@ const pluginRoot = path.resolve(here, "../..");
 const hostRoot = process.env.KANDEV_HOST_ROOT;
 const variant = process.env.VOICE_HOST_VARIANT;
 
-if (!hostRoot || !["modern", "legacy", "below-minimum"].includes(variant ?? "")) {
+if (
+  !hostRoot ||
+  !["modern", "legacy", "below-minimum", "below-minimum-0871"].includes(
+    variant ?? "",
+  )
+) {
   throw new Error(
-    "Set KANDEV_HOST_ROOT and VOICE_HOST_VARIANT=modern|legacy|below-minimum before running Voice host smoke tests.",
+    "Set KANDEV_HOST_ROOT and VOICE_HOST_VARIANT=modern|legacy|below-minimum|below-minimum-0871 before running Voice host smoke tests.",
   );
 }
 

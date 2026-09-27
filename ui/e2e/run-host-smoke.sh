@@ -19,8 +19,12 @@ case "$VARIANT" in
     HOST_ROOT=${KANDEV_HOST_ROOT:-"$PLUGIN_ROOT/../kandev-min"}
     EXPECT_ACTION_API=below-minimum
     ;;
+  below-minimum-0871)
+    HOST_ROOT=${KANDEV_HOST_ROOT:-"$PLUGIN_ROOT/../kandev-fallback"}
+    EXPECT_ACTION_API=below-minimum
+    ;;
   *)
-    echo "VOICE_HOST_VARIANT must be modern, legacy, or below-minimum" >&2
+    echo "VOICE_HOST_VARIANT must be modern, legacy, below-minimum, or below-minimum-0871" >&2
     exit 2
     ;;
 esac

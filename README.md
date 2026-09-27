@@ -37,9 +37,11 @@ leaving a dead button.
 ## Setup
 
 1. Install the plugin (Settings → Plugins → Install, or the tarball upload
-   below). It requires kandev **0.88.0** or newer. Older hosts do not enforce
-   the authenticated and size-limited transcription webhook and cannot deliver
-   composer results.
+   below). It requires kandev **v0.88.0** or newer. Earlier hosts cannot
+   deliver composer results reliably and may not enforce the authenticated,
+   size-limited transcription webhook. Keep the leading `v` in the manifest:
+   old v0.87.x installers compare raw version strings and fail open when the
+   minimum is written as `0.88.0`.
 2. Optional: paste an **OpenAI API key** into the plugin's settings form to
    enable the server engine for everyone on the install. Without it, the two
    browser engines still work and no audio ever reaches your server.
@@ -152,21 +154,24 @@ provider credentials or personal audio.
 
 Use the pinned SDK checkout from above. Add one checkout at the released
 minimum host, Kandev v0.88.0 commit
-`cab9eaf19d997bb4c8020dd263ddc60d5b035b64`, and one below the minimum at
-v0.87.0 commit `dafb315f49482c5d57599274e00c7e1f4798da7e`:
+`cab9eaf19d997bb4c8020dd263ddc60d5b035b64`, and diagnostic checkouts at
+v0.87.0 commit `dafb315f49482c5d57599274e00c7e1f4798da7e` and v0.87.1 commit
+`2089e7c92d29b0b8db55c83f584c700397df4de0`:
 
 ```bash
 git clone https://github.com/kdlbs/kandev.git ../kandev-fallback-088
 git -C ../kandev-fallback-088 checkout cab9eaf19d997bb4c8020dd263ddc60d5b035b64
 git clone https://github.com/kdlbs/kandev.git ../kandev-min
 git -C ../kandev-min checkout dafb315f49482c5d57599274e00c7e1f4798da7e
+git clone https://github.com/kdlbs/kandev.git ../kandev-fallback
+git -C ../kandev-fallback checkout 2089e7c92d29b0b8db55c83f584c700397df4de0
 
 export VOICE_TMPDIR="$HOME/.cache/kandev-plugin-voice-e2e"
 export TMPDIR="$VOICE_TMPDIR"
 export PLAYWRIGHT_BROWSERS_PATH="$VOICE_TMPDIR/browsers"
 mkdir -p "$VOICE_TMPDIR"
 
-for host in ../kandev ../kandev-fallback-088 ../kandev-min; do
+for host in ../kandev ../kandev-fallback-088 ../kandev-min ../kandev-fallback; do
   (cd "$host/apps" && pnpm install --frozen-lockfile)
   (cd "$host/apps/web" && pnpm exec playwright install chromium)
   make -C "$host/apps/backend" build
@@ -179,17 +184,19 @@ make verify-package-host
 VOICE_HOST_VARIANT=modern ui/e2e/run-host-smoke.sh
 VOICE_HOST_VARIANT=legacy ui/e2e/run-host-smoke.sh
 VOICE_HOST_VARIANT=below-minimum ui/e2e/run-host-smoke.sh
+VOICE_HOST_VARIANT=below-minimum-0871 ui/e2e/run-host-smoke.sh
 ```
 
 The modern run uses the API pin in `.kandev-sdk-ref`; the legacy run verifies
-the Button fallback at the declared v0.88.0 minimum. The v0.87.0 run is a
-below-minimum diagnostic: that release accepts this package because its
-version guard mishandles the `v` prefix in the host build version, but the test
-confirms Voice renders no composer action when the host lacks the required
-slot contract. Do not use Voice on hosts older than 0.88.0; the old host also
-does not enforce the webhook access and body-size fields. These runs use real
-Chromium in desktop and Pixel 5 contexts with fake speech, microphone and
-Whisper worker APIs. They require no provider credentials or personal audio.
+the Button fallback at the declared v0.88.0 minimum. The v0.87.0 and v0.87.1
+runs verify that the final archive is rejected before installation. This
+rejection depends on the manifest's `v0.88.0` prefix: the old release guards
+compare raw strings, while v0.88.0 and newer normalize the host tag before
+comparison. `make test-release-version` checks that the release script keeps
+this prefix and minimum in both the source manifest and packaged archive.
+These runs use real Chromium in desktop and Pixel 5 contexts with fake speech,
+microphone and Whisper worker APIs. They require no provider credentials or
+personal audio.
 Keep `VOICE_TMPDIR` outside `~/.kandev/tasks`; the host rejects repositories
 below that path as task worktrees.
 
