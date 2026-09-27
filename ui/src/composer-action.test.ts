@@ -244,6 +244,22 @@ describe("Voice composer Action compatibility", () => {
     expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 
+  it("does not render or request a microphone when the host has no composer contract", () => {
+    renderAction(
+      {
+        taskId: "task-1",
+        taskTitle: "Voice task",
+        activeSessionId: "session-1",
+        sessionIds: ["session-1"],
+      } as PluginComposerSlotProps,
+      false,
+    );
+
+    expect(screen.queryByTestId("voice-plugin-button")).toBeNull();
+    expect(actionHarness.start).not.toHaveBeenCalled();
+    expect(actionHarness.runScope).toBe("");
+  });
+
   it("keeps the real button ref and keyboard focus on the host Action", async () => {
     const user = userEvent.setup();
     renderAction(makeSlotProps());

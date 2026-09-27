@@ -24,10 +24,10 @@ plugin possible.
 Three recognizers, picked automatically or chosen per user in
 **Settings → Plugins → Voice Mode**:
 
-| Engine | Where the audio goes | Trade-off |
-| --- | --- | --- |
-| Browser speech | The browser vendor's servers | Fastest, free, no download. Chromium only. |
-| In-browser Whisper | Nowhere: it stays on the device | Fully private. Downloads a 40–240 MB model once, then a few seconds per recording. |
+| Engine               | Where the audio goes                          | Trade-off                                                                                  |
+| -------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Browser speech       | The browser vendor's servers                  | Fastest, free, no download. Chromium only.                                                 |
+| In-browser Whisper   | Nowhere: it stays on the device               | Fully private. Downloads a 40–240 MB model once, then a few seconds per recording.         |
 | Server transcription | Your kandev server, which relays it to OpenAI | Most accurate, works in every browser. Needs an operator API key and is billed per minute. |
 
 `Automatic` picks the first of those the browser can run, in that order. A
@@ -37,7 +37,9 @@ leaving a dead button.
 ## Setup
 
 1. Install the plugin (Settings → Plugins → Install, or the tarball upload
-   below). It requires kandev **0.87.0** or newer.
+   below). It requires kandev **0.88.0** or newer. Older hosts do not enforce
+   the authenticated and size-limited transcription webhook and cannot deliver
+   composer results.
 2. Optional: paste an **OpenAI API key** into the plugin's settings form to
    enable the server engine for everyone on the install. Without it, the two
    browser engines still work and no audio ever reaches your server.
@@ -63,10 +65,10 @@ entire point.
 
 ### On a phone
 
-The action stays beside the composer and uses the host's touch target. The
-host gives composer actions at least 44px of active height on phones. Hold-to-
-talk becomes press-to-toggle on phones and coarse pointers. The saved setting
-stays unchanged, so a docked keyboard restores hold-to-talk.
+The action stays beside the composer. On hosts with the Action API it uses the
+host's touch target; the legacy fallback follows the host's existing button
+geometry. Hold-to-talk becomes press-to-toggle on phones and coarse pointers.
+The saved setting stays unchanged, so a docked keyboard restores hold-to-talk.
 
 <img src="docs/media/recording-mobile.png" alt="The mobile composer while recording" width="420">
 
@@ -102,7 +104,7 @@ use of it.
 
 ## Development
 
-Use Node 24, pnpm 10 and Go 1.26. The Go backend and frontend types use the
+Use Node 24, pnpm 10.34.5 and Go 1.26. The Go backend and frontend types use the
 Kandev source revision in `.kandev-sdk-ref`. The Go SDK is not yet a separate
 module, so `go.mod` resolves it through a sibling checkout:
 
@@ -124,7 +126,7 @@ The UI imports frontend SDK types only. The build uses the React instance that
 Kandev provides.
 
 ```bash
-corepack prepare pnpm@10 --activate
+corepack prepare pnpm@10.34.5 --activate
 make ui-install
 make check-format
 make vet
@@ -140,6 +142,56 @@ imports the built UI bundle into a disposable host fixture with fake speech
 recognition. `make typecheck` checks the UI types. The package targets check
 all five declared platform binaries, the UI bundle, the Whisper worker, the
 stylesheet, and the package checksums.
+
+### Real-host browser smoke
+
+The Playwright smoke installs the built archive in a disposable Kandev backend
+and checks task chat, Quick Chat, task creation and new-session on desktop and
+mobile. It fakes browser speech, microphone and Whisper worker APIs. It needs no
+provider credentials or personal audio.
+
+Use the pinned SDK checkout from above. Add one checkout at the released
+minimum host, Kandev v0.88.0 commit
+`cab9eaf19d997bb4c8020dd263ddc60d5b035b64`, and one below the minimum at
+v0.87.0 commit `dafb315f49482c5d57599274e00c7e1f4798da7e`:
+
+```bash
+git clone https://github.com/kdlbs/kandev.git ../kandev-fallback-088
+git -C ../kandev-fallback-088 checkout cab9eaf19d997bb4c8020dd263ddc60d5b035b64
+git clone https://github.com/kdlbs/kandev.git ../kandev-min
+git -C ../kandev-min checkout dafb315f49482c5d57599274e00c7e1f4798da7e
+
+export VOICE_TMPDIR="$HOME/.cache/kandev-plugin-voice-e2e"
+export TMPDIR="$VOICE_TMPDIR"
+export PLAYWRIGHT_BROWSERS_PATH="$VOICE_TMPDIR/browsers"
+mkdir -p "$VOICE_TMPDIR"
+
+for host in ../kandev ../kandev-fallback-088 ../kandev-min; do
+  (cd "$host/apps" && pnpm install --frozen-lockfile)
+  (cd "$host/apps/web" && pnpm exec playwright install chromium)
+  make -C "$host/apps/backend" build
+  (cd "$host/apps/web" && pnpm run build:e2e)
+  make -C "$host/apps/backend" e2e-plugin-ui
+  make -C "$host/apps/backend" e2e-plugin-package
+done
+
+make verify-package-host
+VOICE_HOST_VARIANT=modern ui/e2e/run-host-smoke.sh
+VOICE_HOST_VARIANT=legacy ui/e2e/run-host-smoke.sh
+VOICE_HOST_VARIANT=below-minimum ui/e2e/run-host-smoke.sh
+```
+
+The modern run uses the API pin in `.kandev-sdk-ref`; the legacy run verifies
+the Button fallback at the declared v0.88.0 minimum. The v0.87.0 run is a
+below-minimum diagnostic: that release accepts this package because its
+version guard mishandles the `v` prefix in the host build version, but the test
+confirms Voice renders no composer action when the host lacks the required
+slot contract. Do not use Voice on hosts older than 0.88.0; the old host also
+does not enforce the webhook access and body-size fields. These runs use real
+Chromium in desktop and Pixel 5 contexts with fake speech, microphone and
+Whisper worker APIs. They require no provider credentials or personal audio.
+Keep `VOICE_TMPDIR` outside `~/.kandev/tasks`; the host rejects repositories
+below that path as task worktrees.
 
 ## Package and release
 

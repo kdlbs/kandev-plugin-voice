@@ -33,7 +33,8 @@ class PendingPermissionRecorder {
     for (const listener of this.listeners.get("dataavailable") ?? []) {
       listener({ data: new Blob(["fixture"], { type: "audio/webm" }) });
     }
-    for (const listener of this.listeners.get("stop") ?? []) listener({ data: new Blob() });
+    for (const listener of this.listeners.get("stop") ?? [])
+      listener({ data: new Blob() });
   }
 }
 
@@ -88,7 +89,7 @@ describe("useDictation lifecycle", () => {
       await Promise.resolve();
     });
 
-    expect(recorderStarted).toHaveBeenCalledOnce();
+    expect(recorderStarted).not.toHaveBeenCalled();
     expect(track.stop).toHaveBeenCalledOnce();
     expect(onTranscript).not.toHaveBeenCalled();
   });

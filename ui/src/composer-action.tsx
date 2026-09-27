@@ -246,8 +246,26 @@ export function VoiceComposerAction({ slotProps }: { slotProps?: unknown }) {
   const settings = useVoiceSettings();
   // Turning Voice Mode off must cost nothing, including the capability probes
   // and the microphone permission prompt, so the real work lives in a child.
-  if (!props || !settings.enabled) return null;
+  // Older hosts may still render chat-input-actions while forwarding only task
+  // and session ids. A microphone control cannot safely target a composer
+  // without the host capability, so fail closed instead of recording audio
+  // that cannot be inserted or throwing when its transcript arrives.
+  if (!settings.enabled || !hasComposerSlotContract(props)) return null;
   return <EnabledVoiceComposerAction {...props} />;
+}
+
+function hasComposerSlotContract(
+  value: PluginComposerSlotProps | undefined,
+): value is PluginComposerSlotProps {
+  if (!value) return false;
+  return (
+    (value.surface === "task-chat" ||
+      value.surface === "quick-chat" ||
+      value.surface === "task-create" ||
+      value.surface === "new-session") &&
+    typeof value.composer?.insertText === "function" &&
+    typeof value.composer?.submit === "function"
+  );
 }
 
 function EnabledVoiceComposerAction(props: PluginComposerSlotProps) {

@@ -52,7 +52,11 @@ function speechResults(...phrases: string[]) {
   return {
     resultIndex: 0,
     results: Object.assign(
-      phrases.map((phrase) => ({ isFinal: true, 0: { transcript: phrase }, length: 1 })),
+      phrases.map((phrase) => ({
+        isFinal: true,
+        0: { transcript: phrase },
+        length: 1,
+      })),
       { length: phrases.length },
     ),
   };
@@ -63,15 +67,21 @@ type FakeRecorder = {
   mimeType: string;
   start: () => void;
   stop: () => void;
-  addEventListener: (type: string, handler: () => void, options?: unknown) => void;
+  addEventListener: (
+    type: string,
+    handler: () => void,
+    options?: unknown,
+  ) => void;
 };
 
 let stoppedTracks = 0;
 let recorderProducesData = true;
+let recorderStarts = 0;
 
 function installMediaRecorder() {
   stoppedTracks = 0;
   recorderProducesData = true;
+  recorderStarts = 0;
   vi.stubGlobal(
     "MediaRecorder",
     Object.assign(
@@ -82,7 +92,9 @@ function installMediaRecorder() {
         const listeners = new Map<string, Array<(event?: unknown) => void>>();
         instance.state = "recording";
         instance.mimeType = "audio/webm";
-        instance.start = () => {};
+        instance.start = () => {
+          recorderStarts += 1;
+        };
         instance.addEventListener = (type, handler) => {
           const bucket = listeners.get(type) ?? [];
           bucket.push(handler as (event?: unknown) => void);
@@ -115,7 +127,11 @@ function controllerFor(overrides: Partial<DictationOptions> = {}) {
   const transcripts: string[] = [];
   const errors: string[] = [];
   const controller = new DictationController({
-    readConfig: () => ({ engine: "webSpeech", language: "auto", whisperWebModel: "base" }),
+    readConfig: () => ({
+      engine: "webSpeech",
+      language: "auto",
+      whisperWebModel: "base",
+    }),
     onTranscript: (text) => transcripts.push(text),
     onError: (error) => errors.push(error.code),
     ...overrides,
@@ -219,7 +235,11 @@ describe("web speech engine", () => {
 
   it("fails closed when no engine is available", async () => {
     const { controller, errors } = controllerFor({
-      readConfig: () => ({ engine: null, language: "auto", whisperWebModel: "base" }),
+      readConfig: () => ({
+        engine: null,
+        language: "auto",
+        whisperWebModel: "base",
+      }),
     });
 
     await controller.start();
@@ -244,7 +264,11 @@ function fakeWhisperClient(result: string | Error) {
 
 describe("in-browser whisper engine", () => {
   const config = () =>
-    ({ engine: "whisperWeb", language: "pt-BR", whisperWebModel: "base" }) as const;
+    ({
+      engine: "whisperWeb",
+      language: "pt-BR",
+      whisperWebModel: "base",
+    }) as const;
 
   it("records, transcribes locally, and releases the microphone", async () => {
     const client = fakeWhisperClient("  falar agora  ");
@@ -260,6 +284,7 @@ describe("in-browser whisper engine", () => {
     expect(transcripts).toEqual(["falar agora"]);
     expect(client.transcribe).toHaveBeenCalledWith(expect.anything(), "pt");
     expect(stoppedTracks).toBe(1);
+    expect(recorderStarts).toBe(1);
     expect(controller.getSnapshot().state).toBe("idle");
   });
 
@@ -292,13 +317,18 @@ describe("in-browser whisper engine", () => {
         return client;
       },
     });
-    controller.subscribe(() => reports.push(controller.getSnapshot().modelLoad.progress));
+    controller.subscribe(() =>
+      reports.push(controller.getSnapshot().modelLoad.progress),
+    );
 
     await controller.start();
     await controller.stop();
 
     expect(reports).toContain(0.42);
-    expect(controller.getSnapshot().modelLoad).toEqual({ state: "ready", progress: 1 });
+    expect(controller.getSnapshot().modelLoad).toEqual({
+      state: "ready",
+      progress: 1,
+    });
   });
 
   it("releases the loaded model when the user picks another size", async () => {
@@ -313,14 +343,19 @@ describe("in-browser whisper engine", () => {
     controller.releaseWhisperModel();
 
     expect(client.dispose).toHaveBeenCalled();
-    expect(controller.getSnapshot().modelLoad).toEqual({ state: "idle", progress: 0 });
+    expect(controller.getSnapshot().modelLoad).toEqual({
+      state: "idle",
+      progress: 0,
+    });
   });
 
   it("drops a transcript that arrives after the run was cancelled", async () => {
     let release: (value: string) => void = () => {};
     const client = {
       init: vi.fn(async () => {}),
-      transcribe: vi.fn(() => new Promise<string>((resolve) => (release = resolve))),
+      transcribe: vi.fn(
+        () => new Promise<string>((resolve) => (release = resolve)),
+      ),
       dispose: vi.fn(),
     } as unknown as WhisperWebClient;
     const { controller, transcripts, errors } = controllerFor({
@@ -354,17 +389,24 @@ describe("in-browser whisper engine", () => {
     await starting;
 
     expect(stoppedTracks).toBe(1);
+    expect(recorderStarts).toBe(0);
     expect(controller.getSnapshot().state).toBe("idle");
   });
 });
 
 describe("server relay engine", () => {
   const config = () =>
-    ({ engine: "whisperServer", language: "auto", whisperWebModel: "base" }) as const;
+    ({
+      engine: "whisperServer",
+      language: "auto",
+      whisperWebModel: "base",
+    }) as const;
 
   it("uploads to the authenticated webhook and inserts the transcript", async () => {
     host.fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ text: "  from the server  " }), { status: 200 }),
+      new Response(JSON.stringify({ text: "  from the server  " }), {
+        status: 200,
+      }),
     );
     const { controller, transcripts } = controllerFor({ readConfig: config });
 
@@ -381,9 +423,12 @@ describe("server relay engine", () => {
 
   it("turns a 503 into the not-configured message rather than a generic failure", async () => {
     host.fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: "voice transcription is not configured" }), {
-        status: 503,
-      }),
+      new Response(
+        JSON.stringify({ error: "voice transcription is not configured" }),
+        {
+          status: 503,
+        },
+      ),
     );
     const { controller, errors } = controllerFor({ readConfig: config });
 
@@ -401,11 +446,15 @@ describe("server relay engine", () => {
       (_path: string, init: RequestInit) =>
         new Promise((_resolve, reject) => {
           observedSignal = init.signal ?? undefined;
-          init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+          init.signal?.addEventListener("abort", () =>
+            reject(new Error("aborted")),
+          );
           uploadStarted();
         }),
     );
-    const { controller, transcripts, errors } = controllerFor({ readConfig: config });
+    const { controller, transcripts, errors } = controllerFor({
+      readConfig: config,
+    });
 
     await controller.start();
     const stopping = controller.stop();
@@ -438,7 +487,11 @@ describe("dispose", () => {
   it("cancels an active run and releases the model", async () => {
     const client = fakeWhisperClient("ok");
     const { controller } = controllerFor({
-      readConfig: () => ({ engine: "whisperWeb", language: "auto", whisperWebModel: "base" }),
+      readConfig: () => ({
+        engine: "whisperWeb",
+        language: "auto",
+        whisperWebModel: "base",
+      }),
       createWhisperClient: () => client,
     });
     await controller.start();

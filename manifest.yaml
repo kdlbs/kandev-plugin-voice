@@ -12,12 +12,12 @@ author: "kandev"
 categories: ["tools"]
 repo_url: "https://github.com/kdlbs/kandev-plugin-voice"
 
-# The composer capability slots (chat-input-actions with typed composer props,
-# task-create-input-actions, new-session-input-actions) and the authenticated
-# webhook access/size fields only exist from this release onwards. An older
-# host must refuse to install rather than silently treat `transcribe` as a
-# public, 4 MiB endpoint.
-min_kandev_version: "0.87.0"
+# v0.88.0 is the first released host with the fully wired composer capability
+# slots, editable plugin keybindings, and authenticated, size-limited webhook
+# enforcement. Installing this package on an older host is unsafe: it could
+# expose the transcription relay and cannot deliver transcripts to composers.
+# v0.87.0's released version guard also mishandles its `v`-prefixed build tag.
+min_kandev_version: "0.88.0"
 
 runtime:
   type: binary
