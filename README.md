@@ -121,7 +121,7 @@ make package-host     # build a tarball for this platform only
 Install the result into a **disposable** kandev instance:
 
 ```bash
-curl -F package=@kandev-plugin-voice-0.1.0.tar.gz \
+curl -F package=@kandev-plugin-voice-0.1.1.tar.gz \
   http://localhost:8080/api/plugins/install
 ```
 
