@@ -209,7 +209,7 @@ check the exact package contents and checksums.
 Install an archive into a **disposable** Kandev instance:
 
 ```bash
-curl -F package=@kandev-plugin-voice-0.1.0.tar.gz \
+curl -F package=@kandev-plugin-voice-0.1.1.tar.gz \
   http://localhost:8080/api/plugins/install
 ```
 

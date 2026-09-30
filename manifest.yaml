@@ -5,7 +5,7 @@
 # OpenAI with the operator's key, so that key never reaches the browser.
 id: "kandev-plugin-voice"
 api_version: 1
-version: "0.1.0"
+version: "0.1.1"
 display_name: "Voice Mode"
 description: "Dictate prompts into any kandev composer. Speak with the browser's own recognizer, a private in-browser Whisper model, or the server-side OpenAI relay."
 author: "kandev"
