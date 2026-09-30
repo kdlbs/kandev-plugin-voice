@@ -7,18 +7,36 @@
  * most one recognition run at a time and guarantees that cancelling releases
  * the microphone and drops any transcript still in flight.
  */
-import { collectFinalTranscripts, createSpeechRecognition, type SpeechRecognitionInstance } from "./engines/web-speech";
-import { startCapture, stopCapture, teardownCapture, type CaptureHandle } from "./engines/recorder";
+import {
+  collectFinalTranscripts,
+  createSpeechRecognition,
+  type SpeechRecognitionInstance,
+} from "./engines/web-speech";
+import {
+  startCapture,
+  stopCapture,
+  teardownCapture,
+  type CaptureHandle,
+} from "./engines/recorder";
 import { transcribeViaServer } from "./engines/server-relay";
 import { WhisperWebClient } from "./engines/whisper-web";
-import { mapMicError, mapSpeechError, mapTranscribeError, mapWhisperError, type VoiceError } from "./errors";
+import {
+  mapMicError,
+  mapSpeechError,
+  mapTranscribeError,
+  mapWhisperError,
+  type VoiceError,
+} from "./errors";
 import type { ResolvedEngine } from "./capabilities";
 import type { WhisperWebModelSize } from "./settings";
 import { t } from "./strings";
 
 export type DictationState = "idle" | "requesting" | "recording" | "processing";
 
-export type ModelLoadState = { state: "idle" | "loading" | "ready" | "error"; progress: number };
+export type ModelLoadState = {
+  state: "idle" | "loading" | "ready" | "error";
+  progress: number;
+};
 
 export type DictationSnapshot = {
   state: DictationState;
@@ -28,21 +46,35 @@ export type DictationSnapshot = {
 
 export type DictationOptions = {
   /** Reads the settings that matter at the moment a run starts. */
-  readConfig(): { engine: ResolvedEngine | null; language: string; whisperWebModel: WhisperWebModelSize };
+  readConfig(): {
+    engine: ResolvedEngine | null;
+    language: string;
+    whisperWebModel: WhisperWebModelSize;
+  };
   onTranscript(text: string): void;
   onError?(error: VoiceError): void;
   /** Injected in tests; production uses the real worker-backed client. */
-  createWhisperClient?(onProgress: (progress: number) => void): WhisperWebClient;
+  createWhisperClient?(
+    onProgress: (progress: number) => void,
+  ): WhisperWebClient;
 };
 
 type Driver =
   | { kind: "webSpeech"; recognition: SpeechRecognitionInstance }
-  | { kind: "capture"; handle: CaptureHandle; engine: "whisperWeb" | "whisperServer" };
+  | {
+      kind: "capture";
+      handle: CaptureHandle;
+      engine: "whisperWeb" | "whisperServer";
+    };
 
 const IDLE_MODEL_LOAD: ModelLoadState = { state: "idle", progress: 0 };
 
 export class DictationController {
-  private snapshot: DictationSnapshot = { state: "idle", error: null, modelLoad: IDLE_MODEL_LOAD };
+  private snapshot: DictationSnapshot = {
+    state: "idle",
+    error: null,
+    modelLoad: IDLE_MODEL_LOAD,
+  };
   private listeners = new Set<() => void>();
   private driver: Driver | null = null;
   /**
@@ -176,7 +208,8 @@ export class DictationController {
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.lang = lang;
-    recognition.onresult = (event) => collectFinalTranscripts(event, transcripts);
+    recognition.onresult = (event) =>
+      collectFinalTranscripts(event, transcripts);
     recognition.onerror = (event) => this.fail(mapSpeechError(event.error));
     recognition.onend = () => {
       this.driver = null;
@@ -193,24 +226,40 @@ export class DictationController {
     }
   }
 
-  private async beginCapture(engine: "whisperWeb" | "whisperServer"): Promise<void> {
+  private async beginCapture(
+    engine: "whisperWeb" | "whisperServer",
+  ): Promise<void> {
     this.patch({ state: "requesting" });
+    const signal = this.run?.signal;
     try {
-      const handle = await startCapture();
+      const handle = await startCapture(signal);
+      if (!handle) return;
       // A cancel that landed while getUserMedia was pending must win, or the
       // microphone stays hot with nothing owning it.
-      if (this.disposed || this.snapshot.state !== "requesting") {
+      if (
+        this.disposed ||
+        signal?.aborted ||
+        this.snapshot.state !== "requesting"
+      ) {
         teardownCapture(handle);
         return;
       }
       this.driver = { kind: "capture", handle, engine };
       this.patch({ state: "recording" });
     } catch (err) {
+      if (
+        this.disposed ||
+        signal?.aborted ||
+        this.snapshot.state !== "requesting"
+      )
+        return;
       this.fail(mapMicError(err));
     }
   }
 
-  private async finishCapture(driver: Extract<Driver, { kind: "capture" }>): Promise<void> {
+  private async finishCapture(
+    driver: Extract<Driver, { kind: "capture" }>,
+  ): Promise<void> {
     // Claim the driver before the first await. In hold mode pointerup and
     // pointercancel can both fire in one task; without this the second call
     // would race the first and could clobber a brand-new run.
@@ -229,7 +278,11 @@ export class DictationController {
     try {
       const text =
         driver.engine === "whisperServer"
-          ? await transcribeViaServer(blob, `recording.${driver.handle.ext}`, signal)
+          ? await transcribeViaServer(
+              blob,
+              `recording.${driver.handle.ext}`,
+              signal,
+            )
           : await this.transcribeLocally(blob, signal);
       if (signal.aborted) return;
       this.run = null;
@@ -239,28 +292,38 @@ export class DictationController {
       if (signal.aborted) return;
       this.run = null;
       this.fail(
-        driver.engine === "whisperServer" ? mapTranscribeError(err) : mapWhisperError(err),
+        driver.engine === "whisperServer"
+          ? mapTranscribeError(err)
+          : mapWhisperError(err),
       );
     }
   }
 
-  private async transcribeLocally(blob: Blob, signal: AbortSignal): Promise<string> {
+  private async transcribeLocally(
+    blob: Blob,
+    signal: AbortSignal,
+  ): Promise<string> {
     const { language, whisperWebModel } = this.options.readConfig();
     const client = await this.ensureWhisperClient(whisperWebModel);
     if (signal.aborted) return "";
     return client.transcribe(blob, resolveWhisperLang(language));
   }
 
-  private async ensureWhisperClient(model: WhisperWebModelSize): Promise<WhisperWebClient> {
+  private async ensureWhisperClient(
+    model: WhisperWebModelSize,
+  ): Promise<WhisperWebClient> {
     if (this.whisper && this.whisperModel !== model) this.releaseWhisperModel();
     if (!this.whisper) {
       const create =
         this.options.createWhisperClient ??
-        ((onProgress) => new WhisperWebClient({ onProgress: (p) => onProgress(p.progress) }));
+        ((onProgress) =>
+          new WhisperWebClient({ onProgress: (p) => onProgress(p.progress) }));
       // transformers.js reports 0-100; the rest of this plugin treats
       // modelLoad.progress as a 0-1 fraction, matching `ready: 1` below.
       this.whisper = create((progress) =>
-        this.patch({ modelLoad: { state: "loading", progress: progress / 100 } }),
+        this.patch({
+          modelLoad: { state: "loading", progress: progress / 100 },
+        }),
       );
       this.patch({ modelLoad: { state: "loading", progress: 0 } });
     }
@@ -291,5 +354,7 @@ export function resolveSpeechLang(preference: string): string {
 export function resolveWhisperLang(preference: string): string | undefined {
   if (!preference || preference === "auto") return undefined;
   const dash = preference.indexOf("-");
-  return dash > 0 ? preference.slice(0, dash).toLowerCase() : preference.toLowerCase();
+  return dash > 0
+    ? preference.slice(0, dash).toLowerCase()
+    : preference.toLowerCase();
 }

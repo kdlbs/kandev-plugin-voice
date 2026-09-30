@@ -1,9 +1,11 @@
-.PHONY: build ui ui-install test test-go test-ui typecheck fmt vet package package-host clean
+.PHONY: build ui ui-install test test-go test-ui smoke-bundle test-package-verifier test-release-version typecheck fmt check-format vet package package-host verify-package verify-package-host package-file clean
 
 BIN := bin/kandev-plugin-voice
 VERSION := 0.1.1
 STAGE := .build/stage
 PKG_OUT := kandev-plugin-voice-$(VERSION).tar.gz
+KANDEV_SDK := ../kandev/apps/backend
+PNPM ?= pnpm
 
 ## Build the plugin binary for the host platform (development use). kandev
 ## installs from `make package`/`package-host` output, not this.
@@ -13,25 +15,37 @@ build:
 
 ## Install the UI toolchain. Needed once before `make ui`.
 ui-install:
-	cd ui && pnpm install --frozen-lockfile
+	cd ui && $(PNPM) install --frozen-lockfile
 
 ## Build ui/bundle.js and ui/whisper-worker.js with esbuild.
 ui:
 	cd ui && node build.mjs
 
-test: test-go test-ui
+test: test-go test-ui smoke-bundle test-package-verifier test-release-version
 
 test-go:
 	go test ./server/...
 
 test-ui:
-	cd ui && pnpm exec vitest run
+	cd ui && $(PNPM) exec vitest run
+
+smoke-bundle: ui
+	node ui/smoke-built-bundle.mjs
+
+test-package-verifier:
+	sh scripts/test-verify-package.sh
+
+test-release-version:
+	sh scripts/test-verify-release-version.sh
 
 typecheck:
-	cd ui && pnpm exec tsc --noEmit
+	cd ui && $(PNPM) exec tsc --noEmit
 
 fmt:
 	gofmt -l .
+
+check-format:
+	@test -z "$$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
 
 vet:
 	go vet ./server/...
@@ -52,7 +66,7 @@ package: ui
 	GOOS=darwin  GOARCH=amd64 go build -o $(STAGE)/server/plugin-darwin-amd64      ./server
 	GOOS=darwin  GOARCH=arm64 go build -o $(STAGE)/server/plugin-darwin-arm64      ./server
 	GOOS=windows GOARCH=amd64 go build -o $(STAGE)/server/plugin-windows-amd64.exe ./server
-	go run github.com/kandev/kandev/cmd/plugin-pack -dir $(STAGE) -out $(PKG_OUT)
+	cd $(KANDEV_SDK) && go run ./cmd/plugin-pack -dir $(CURDIR)/$(STAGE) -out $(CURDIR)/$(PKG_OUT)
 	rm -rf $(STAGE)
 	@echo "Wrote $(PKG_OUT)"
 
@@ -60,9 +74,28 @@ package: ui
 package-host: ui
 	$(stage_common)
 	go build -o $(STAGE)/server/plugin-$$(go env GOOS)-$$(go env GOARCH)$$(go env GOEXE) ./server
-	go run github.com/kandev/kandev/cmd/plugin-pack -dir $(STAGE) -out $(PKG_OUT) -platform-only
+	cd $(KANDEV_SDK) && go run ./cmd/plugin-pack -dir $(CURDIR)/$(STAGE) -out $(CURDIR)/$(PKG_OUT) -platform-only
 	rm -rf $(STAGE)
 	@echo "Wrote $(PKG_OUT)"
+
+## Validate the all-platform tarball's exact files, declared binaries, and checksums.
+verify-package: package
+	@set -eu; \
+		tmp="$$(mktemp -d)"; \
+		trap 'rm -rf "$$tmp"' EXIT; \
+		tar -xzf "$(PKG_OUT)" -C "$$tmp"; \
+		sh scripts/verify-package.sh "$$tmp" full
+
+## Validate a host-only tarball's exact files, declared binary, and checksums.
+verify-package-host: package-host
+	@set -eu; \
+		tmp="$$(mktemp -d)"; \
+		trap 'rm -rf "$$tmp"' EXIT; \
+		tar -xzf "$(PKG_OUT)" -C "$$tmp"; \
+		sh scripts/verify-package.sh "$$tmp" host "$$(go env GOOS)-$$(go env GOARCH)"
+
+package-file:
+	@printf '%s\n' "$(PKG_OUT)"
 
 clean:
 	rm -rf bin $(STAGE) ui/bundle.js ui/whisper-worker.js kandev-plugin-voice-*.tar.gz
