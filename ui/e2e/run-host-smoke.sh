@@ -29,9 +29,10 @@ case "$VARIANT" in
     ;;
 esac
 
-PACKAGE_PATH=${VOICE_PACKAGE_PATH:-"$PLUGIN_ROOT/kandev-plugin-voice-0.1.0.tar.gz"}
-if [ ! -x "$HOST_ROOT/apps/backend/bin/kandev" ]; then
-  echo "Missing host backend: $HOST_ROOT/apps/backend/bin/kandev" >&2
+PACKAGE_PATH=${VOICE_PACKAGE_PATH:-"$PLUGIN_ROOT/kandev-plugin-voice-0.1.1.tar.gz"}
+HOST_BACKEND=${KANDEV_E2E_BIN:-"$HOST_ROOT/apps/backend/bin/kandev"}
+if [ ! -x "$HOST_BACKEND" ]; then
+  echo "Missing host backend: $HOST_BACKEND" >&2
   exit 2
 fi
 if [ ! -f "$HOST_ROOT/apps/web/dist/index.html" ]; then
@@ -41,6 +42,19 @@ fi
 if [ ! -f "$PACKAGE_PATH" ]; then
   echo "Missing Voice package: $PACKAGE_PATH" >&2
   exit 2
+fi
+if [ -n "${KANDEV_E2E_BIN:-}" ]; then
+  HOST_MOCK_AGENT="$HOST_ROOT/apps/backend/bin/mock-agent"
+  RUNTIME_MOCK_AGENT="$(dirname -- "$KANDEV_E2E_BIN")/mock-agent"
+  if [ ! -x "$HOST_MOCK_AGENT" ]; then
+    echo "Missing E2E mock-agent fixture: $HOST_MOCK_AGENT (run make -C $HOST_ROOT/apps/backend build-mock-agent)" >&2
+    exit 2
+  fi
+  if [ ! -x "$RUNTIME_MOCK_AGENT" ] || ! cmp -s "$HOST_MOCK_AGENT" "$RUNTIME_MOCK_AGENT"; then
+    cp "$HOST_MOCK_AGENT" "$RUNTIME_MOCK_AGENT"
+    chmod 0755 "$RUNTIME_MOCK_AGENT"
+  fi
+  export KANDEV_E2E_SKIP_FRESHNESS=${KANDEV_E2E_SKIP_FRESHNESS:-1}
 fi
 
 export KANDEV_HOST_ROOT="$HOST_ROOT"

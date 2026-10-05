@@ -179,6 +179,14 @@ const FAKE_APIS = () => {
 };
 
 function registerVoiceActionTests(test: any, expect: any) {
+  if (process.env.VOICE_EXPECT_HOST_VERSION) {
+    test(`reports the expected host version ${process.env.VOICE_EXPECT_HOST_VERSION}`, async ({ apiClient }: any) => {
+      const health = await apiClient.rawRequest("GET", "/health");
+      expect(health.ok).toBe(true);
+      expect((await health.json()).version).toBe(process.env.VOICE_EXPECT_HOST_VERSION);
+    });
+  }
+
   function selectProjectPage(testPage: any, voiceMobilePage: any, testInfo: any) {
     return testInfo.project.name === "mobile-chrome" ? voiceMobilePage : testPage;
   }
@@ -291,12 +299,37 @@ function registerVoiceActionTests(test: any, expect: any) {
         await dialog.getByTestId("quick-chat-add-menu-trigger").click();
         await testPage.getByTestId("quick-chat-new-agent").click();
       }
+      await expect(setup).toBeVisible();
       const selector = dialog.getByTestId("agent-profile-selector");
       if ((await selector.innerText()).includes("Select agent")) {
         await selector.click();
         await testPage.getByRole("option").first().click();
       }
-      await dialog.getByTestId("quick-chat-start").click();
+      // Newer hosts expose the same composer-action contract while writing
+      // Quick Chat's opening prompt. Older supported hosts may only expose
+      // the active-session slot, so keep that path optional on the legacy run.
+      const openingButton = dialog.getByTestId("voice-plugin-button");
+      if (process.env.VOICE_EXPECT_ACTION_API === "action") {
+        await expectActionPathAndGeometry(openingButton, "quick-chat", touch);
+        await exerciseAction(
+          testPage,
+          openingButton,
+          dialog.getByTestId("task-description-input"),
+          touch,
+          "quick-chat opening",
+        );
+      }
+      const legacyStart = dialog.getByTestId("quick-chat-start");
+      if (await legacyStart.count()) {
+        await legacyStart.click();
+      } else {
+        await dialog
+          .getByTestId("task-description-input")
+          .fill("Please get ready for my next question.");
+        const send = dialog.getByTestId("quick-chat-send");
+        await expect(send).toBeEnabled({ timeout: 10_000 });
+        await send.click();
+      }
       const editor = dialog
         .locator('.tiptap.ProseMirror[contenteditable="true"]:visible')
         .first();
@@ -411,7 +444,7 @@ function registerVoiceActionTests(test: any, expect: any) {
         )
       ) {
         await expect(editor).toHaveValue(
-          /VOICE task-create RESULT|VOICE new-session RESULT/,
+          new RegExp(`VOICE PREFIX VOICE ${surface} RESULT`),
         );
       } else {
         await expect(editor).toContainText(`VOICE ${surface} RESULT`);
@@ -775,7 +808,7 @@ function registerVoiceActionTests(test: any, expect: any) {
       test.setTimeout(150_000);
       const touch = testInfo.project.name === "mobile-chrome";
       await installVoice(testPage, apiClient);
-      const { chat, editor } = await createTask(
+      const { task, chat, editor } = await createTask(
         testPage,
         apiClient,
         seedData,
@@ -798,10 +831,25 @@ function registerVoiceActionTests(test: any, expect: any) {
       if (touch) await submit.tap();
       else await submit.click();
 
+      // Submission briefly disables the native composer, which must cancel
+      // the in-flight recording even though the legacy host re-enables queued
+      // input while the agent is still running.
       await expect(button).toHaveAttribute("data-state", "idle");
-      await expect(button).toBeDisabled({ timeout: 30_000 });
       await finishSpeech(testPage, before, "STALE VOICE RESULT");
       await expect(editor).not.toContainText("STALE VOICE RESULT");
+
+      await expect
+        .poll(
+          async () => {
+            const { sessions } = await apiClient.listTaskSessions(task.id);
+            return sessions.find((session: any) => session.id === task.session_id)?.state;
+          },
+          {
+            timeout: 90_000,
+            message: "Voice E2E native turn should finish before re-enabling the action",
+          },
+        )
+        .toBe("WAITING_FOR_INPUT");
       await expect(button).toBeEnabled({ timeout: 60_000 });
       await expect(button).toHaveAccessibleName("Start dictation");
     });

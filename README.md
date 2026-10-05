@@ -5,9 +5,11 @@ any native composer instead of typing it.
 
 The microphone button appears beside the existing composer controls in task
 chat, Quick Chat, task creation and new-session creation, on desktop and on a
-phone. Speak, and the transcript is inserted at your cursor. kandev keeps
-ownership of the draft and of submission throughout — the plugin never builds
-or sends a message itself.
+phone. On Kandev v0.97.0, the Quick Chat setup composer also exposes the plugin
+action: dictate the opening prompt there, then start the session. Speak, and
+the transcript is inserted at your cursor. kandev keeps ownership of the draft
+and of submission throughout — the plugin never builds or sends a message
+itself.
 
 ![The kandev chat composer with the dictation button beside the native controls](docs/media/composer.png)
 
@@ -151,6 +153,49 @@ The Playwright smoke installs the built archive in a disposable Kandev backend
 and checks task chat, Quick Chat, task creation and new-session on desktop and
 mobile. It fakes browser speech, microphone and Whisper worker APIs. It needs no
 provider credentials or personal audio.
+
+Stable-release validation used the released Kandev v0.97.0 tag at commit
+`e43881c7555372897b57ec51c705f1e05da43c40`. The runtime came from the official
+Linux x64 release archive (SHA-256
+`8c7bef704294570fa5c5240055e181a547801b34f22aeca08f7ca71bbb5f0022`), and the
+browser smoke checked `/health` for `v0.97.0`. To reproduce it, build the web
+fixtures from that exact release checkout and unpack the official runtime into
+a disposable directory:
+
+```bash
+git clone https://github.com/kdlbs/kandev.git ../kandev-v097
+git -C ../kandev-v097 checkout e43881c7555372897b57ec51c705f1e05da43c40
+(cd ../kandev-v097/apps && corepack pnpm install --frozen-lockfile)
+(cd ../kandev-v097/apps/web && corepack pnpm run build)
+make -C ../kandev-v097/apps/backend build-mock-agent e2e-plugin-package
+
+# Extract the official v0.97.0 Linux x64 archive under a disposable directory.
+export KANDEV_HOST_ROOT="$PWD/../kandev-v097"
+export KANDEV_E2E_BIN="/path/to/disposable/kandev-v0.97.0/bin/kandev"
+export VOICE_TMPDIR="$(mktemp -d /tmp/voice-v097.XXXXXX)"
+export TMPDIR="$VOICE_TMPDIR"
+export PLAYWRIGHT_BROWSERS_PATH="$VOICE_TMPDIR/browsers"
+(cd ../kandev-v097/apps/web && corepack pnpm exec playwright install chromium)
+
+make verify-package-host
+export VOICE_EXPECT_HOST_VERSION=v0.97.0
+VOICE_HOST_VARIANT=modern ui/e2e/run-host-smoke.sh
+```
+
+The runner stages the release-source-built `mock-agent` E2E fixture beside the
+disposable runtime when it is absent. The tested Quick Chat setup composer is
+`quickChatComposer`, rendered through the `chat-input-actions` plugin slot; the
+browser test selects an agent profile, dictates into the opening prompt and
+then submits it with the host's Quick Chat control. The v0.97.0 matrix passed
+14 cases (8 desktop and 6 Pixel 5), with two expected phone-only skips for
+mouse pointer-capture and keyboard-shortcut tests. The tested host-only archive
+was `kandev-plugin-voice-0.1.1.tar.gz`, SHA-256
+`2f63e3e4951b4234b720bfd09af24784b89fb918bff97afb6be153844c151a8e`. The same
+archive passed 12 cases on the v0.88.0 minimum host with two expected phone-only
+skips, and v0.87.0 and v0.87.1 rejected installation in both browser contexts.
+The matrix also checked action geometry, coarse-pointer toggle, pointer
+cancellation and lost capture, scoped shortcut delivery, busy/download states,
+and permission, unmount and re-enable cleanup.
 
 Use the pinned SDK checkout from above. Add one checkout at the released
 minimum host, Kandev v0.88.0 commit
