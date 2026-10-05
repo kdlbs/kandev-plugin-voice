@@ -189,7 +189,7 @@ browser test selects an agent profile, dictates into the opening prompt and
 then submits it with the host's Quick Chat control. The v0.97.0 matrix passed
 14 cases (8 desktop and 6 Pixel 5), with two expected phone-only skips for
 mouse pointer-capture and keyboard-shortcut tests. The tested host-only archive
-was `kandev-plugin-voice-0.1.1.tar.gz`, SHA-256
+was `kandev-plugin-voice-0.2.0.tar.gz`, SHA-256
 `2f63e3e4951b4234b720bfd09af24784b89fb918bff97afb6be153844c151a8e`. The same
 archive passed 12 cases on the v0.88.0 minimum host with two expected phone-only
 skips, and v0.87.0 and v0.87.1 rejected installation in both browser contexts.
@@ -254,7 +254,7 @@ check the exact package contents and checksums.
 Install an archive into a **disposable** Kandev instance:
 
 ```bash
-curl -F package=@kandev-plugin-voice-0.1.1.tar.gz \
+curl -F package=@kandev-plugin-voice-0.2.0.tar.gz \
   http://localhost:8080/api/plugins/install
 ```
 

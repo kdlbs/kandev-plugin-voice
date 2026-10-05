@@ -1,7 +1,7 @@
 .PHONY: build ui ui-install test test-go test-ui smoke-bundle test-package-verifier test-release-version typecheck fmt check-format vet package package-host verify-package verify-package-host package-file clean
 
 BIN := bin/kandev-plugin-voice
-VERSION := 0.1.1
+VERSION := 0.2.0
 STAGE := .build/stage
 PKG_OUT := kandev-plugin-voice-$(VERSION).tar.gz
 KANDEV_SDK := ../kandev/apps/backend
