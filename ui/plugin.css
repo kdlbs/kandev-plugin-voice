@@ -52,12 +52,27 @@
   color: var(--muted-foreground);
 }
 
+/* The Action host owns its button and glyph box. This wrapper only keeps the
+ * recording pulse around Voice's decorative glyph inside that box. */
+.kv-action-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .kv-pulse-ring {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--destructive) 40%, transparent);
   animation: kv-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.kv-action-icon .kv-pulse-ring {
+  inset: -0.25rem;
+  border-radius: 0.375rem;
+  pointer-events: none;
 }
 
 @keyframes kv-pulse {

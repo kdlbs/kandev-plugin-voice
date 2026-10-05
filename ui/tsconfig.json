@@ -16,6 +16,10 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@kandev/plugin-sdk": ["../../kandev/apps/packages/plugin-sdk/src/index.ts"]
+    },
     "types": [
       "vitest/globals"
     ]

@@ -16,7 +16,10 @@ export type CaptureHandle = {
  * per byte; the empty mime lets MediaRecorder choose when none match.
  */
 export function pickRecorderMime(): { mime: string; ext: string } {
-  if (typeof window === "undefined" || typeof window.MediaRecorder === "undefined") {
+  if (
+    typeof window === "undefined" ||
+    typeof window.MediaRecorder === "undefined"
+  ) {
     return { mime: "", ext: "webm" };
   }
   const candidates = [
@@ -32,10 +35,22 @@ export function pickRecorderMime(): { mime: string; ext: string } {
   return { mime: "", ext: "webm" };
 }
 
-export async function startCapture(): Promise<CaptureHandle> {
+export async function startCapture(
+  signal?: AbortSignal,
+): Promise<CaptureHandle | null> {
   const { mime, ext } = pickRecorderMime();
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  // getUserMedia cannot be aborted consistently across browsers. A permission
+  // grant can arrive after the composer that requested it has unmounted, so
+  // stop the fresh stream before constructing or starting a recorder.
+  if (signal?.aborted) {
+    for (const track of stream.getTracks()) track.stop();
+    return null;
+  }
+  const recorder = new MediaRecorder(
+    stream,
+    mime ? { mimeType: mime } : undefined,
+  );
   const chunks: Blob[] = [];
   recorder.addEventListener("dataavailable", (e) => {
     if (e.data && e.data.size > 0) chunks.push(e.data);
@@ -62,7 +77,8 @@ export function stopCapture(handle: CaptureHandle): Promise<Blob | null> {
       "stop",
       () => {
         const type = handle.recorder.mimeType || handle.mime || "audio/webm";
-        const blob = handle.chunks.length > 0 ? new Blob(handle.chunks, { type }) : null;
+        const blob =
+          handle.chunks.length > 0 ? new Blob(handle.chunks, { type }) : null;
         teardownCapture(handle);
         resolve(blob);
       },

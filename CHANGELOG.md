@@ -5,4 +5,3 @@
 ### Changed
 
 - Fix marketplace release archive checksum (#5) (f262598)
-
