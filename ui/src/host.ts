@@ -1,8 +1,7 @@
 /**
  * The host handle, plus the slice of kandev's plugin contract this bundle
- * uses. The types mirror `apps/web/lib/plugins/types.ts` — kandev does not
- * publish them as a package yet, so they are restated here and must be kept
- * in step with `docs/plans/plugins/PLUGIN-API.md`.
+ * uses. These local adapter types describe the existing host integration and
+ * must be kept in step with `docs/plans/plugins/PLUGIN-API.md`.
  */
 
 export const PLUGIN_ID = "kandev-plugin-voice";

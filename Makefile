@@ -1,15 +1,16 @@
-.PHONY: build ui ui-install test test-go test-ui smoke-bundle test-package-verifier test-release-version typecheck fmt check-format vet package package-host verify-package verify-package-host package-file clean
+.PHONY: build ui ui-install test test-go test-ui smoke-bundle test-package-verifier test-release-version typecheck fmt check-format vet package package-host verify-package verify-package-host package-file sdk-check clean
 
 BIN := bin/kandev-plugin-voice
 VERSION := 0.2.0
 STAGE := .build/stage
 PKG_OUT := kandev-plugin-voice-$(VERSION).tar.gz
-KANDEV_SDK := ../kandev/apps/backend
+# Packaging only: checkout the commit in .kandev-tooling-ref, including pluginsdk/.
+KANDEV_TOOLING ?= ../kandev/apps/backend
 PNPM ?= pnpm
 
 ## Build the plugin binary for the host platform (development use). kandev
 ## installs from `make package`/`package-host` output, not this.
-build:
+build: sdk-check
 	mkdir -p bin
 	go build -o $(BIN) ./server/...
 
@@ -17,8 +18,12 @@ build:
 ui-install:
 	cd ui && $(PNPM) install --frozen-lockfile
 
+## Check the selected Go module and installed registry frontend SDK records.
+sdk-check:
+	cd ui && go run github.com/kdlbs/kandev/pluginsdk/cmd/kandev-sdk-check@v0.1.0 --manifest ../manifest.yaml --frontend-sdk node_modules/@kdlbs/plugin-sdk
+
 ## Build ui/bundle.js and ui/whisper-worker.js with esbuild.
-ui:
+ui: sdk-check
 	cd ui && node build.mjs
 
 test: test-go test-ui smoke-bundle test-package-verifier test-release-version
@@ -51,7 +56,7 @@ vet:
 	go vet ./server/...
 
 ## Stage manifest + built UI assets + server binaries, then pack with the
-## kandev plugin-pack CLI (resolved through this repo's go.mod `replace`).
+## backend-owned plugin-pack CLI from the independently pinned tooling checkout.
 define stage_common
 	rm -rf $(STAGE)
 	mkdir -p $(STAGE)/server $(STAGE)/ui
@@ -66,7 +71,7 @@ package: ui
 	GOOS=darwin  GOARCH=amd64 go build -o $(STAGE)/server/plugin-darwin-amd64      ./server
 	GOOS=darwin  GOARCH=arm64 go build -o $(STAGE)/server/plugin-darwin-arm64      ./server
 	GOOS=windows GOARCH=amd64 go build -o $(STAGE)/server/plugin-windows-amd64.exe ./server
-	cd $(KANDEV_SDK) && go run ./cmd/plugin-pack -dir $(CURDIR)/$(STAGE) -out $(CURDIR)/$(PKG_OUT)
+	cd "$(KANDEV_TOOLING)" && go run ./cmd/plugin-pack -dir $(CURDIR)/$(STAGE) -out $(CURDIR)/$(PKG_OUT)
 	rm -rf $(STAGE)
 	@echo "Wrote $(PKG_OUT)"
 
@@ -74,7 +79,7 @@ package: ui
 package-host: ui
 	$(stage_common)
 	go build -o $(STAGE)/server/plugin-$$(go env GOOS)-$$(go env GOARCH)$$(go env GOEXE) ./server
-	cd $(KANDEV_SDK) && go run ./cmd/plugin-pack -dir $(CURDIR)/$(STAGE) -out $(CURDIR)/$(PKG_OUT) -platform-only
+	cd "$(KANDEV_TOOLING)" && go run ./cmd/plugin-pack -dir $(CURDIR)/$(STAGE) -out $(CURDIR)/$(PKG_OUT) -platform-only
 	rm -rf $(STAGE)
 	@echo "Wrote $(PKG_OUT)"
 

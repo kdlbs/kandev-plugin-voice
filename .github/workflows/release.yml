@@ -57,24 +57,24 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Read pinned Kandev source revision
-        id: sdk
+      - name: Read pinned Kandev packaging-tool revision
+        id: tooling
         working-directory: plugin
         run: |
           set -euo pipefail
-          sdk_ref="$(cat .kandev-sdk-ref)"
-          [[ "$sdk_ref" =~ ^[0-9a-f]{40}$ ]]
-          echo "ref=$sdk_ref" >> "$GITHUB_OUTPUT"
+          tooling_ref="$(cat .kandev-tooling-ref)"
+          [[ "$tooling_ref" =~ ^[0-9a-f]{40}$ ]]
+          echo "ref=$tooling_ref" >> "$GITHUB_OUTPUT"
 
-      - name: Check out Kandev SDK contract
+      - name: Check out Kandev packaging tools
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           repository: kdlbs/kandev
           path: kandev
-          ref: ${{ steps.sdk.outputs.ref }}
+          ref: ${{ steps.tooling.outputs.ref }}
           sparse-checkout: |
             apps/backend
-            apps/packages/plugin-sdk
+            pluginsdk
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -95,6 +95,10 @@ jobs:
       - name: Install locked UI test dependencies
         working-directory: plugin
         run: make ui-install
+
+      - name: Check public SDK compatibility
+        working-directory: plugin
+        run: make sdk-check
 
       - name: Compute next release version
         id: version
@@ -227,24 +231,24 @@ jobs:
           path: plugin
           ref: ${{ github.event_name == 'push' && github.ref || needs.prepare.outputs.tag }}
 
-      - name: Read pinned Kandev source revision
-        id: sdk
+      - name: Read pinned Kandev packaging-tool revision
+        id: tooling
         working-directory: plugin
         run: |
           set -euo pipefail
-          sdk_ref="$(cat .kandev-sdk-ref)"
-          [[ "$sdk_ref" =~ ^[0-9a-f]{40}$ ]]
-          echo "ref=$sdk_ref" >> "$GITHUB_OUTPUT"
+          tooling_ref="$(cat .kandev-tooling-ref)"
+          [[ "$tooling_ref" =~ ^[0-9a-f]{40}$ ]]
+          echo "ref=$tooling_ref" >> "$GITHUB_OUTPUT"
 
-      - name: Check out Kandev SDK contract
+      - name: Check out Kandev packaging tools
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           repository: kdlbs/kandev
           path: kandev
-          ref: ${{ steps.sdk.outputs.ref }}
+          ref: ${{ steps.tooling.outputs.ref }}
           sparse-checkout: |
             apps/backend
-            apps/packages/plugin-sdk
+            pluginsdk
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -265,6 +269,10 @@ jobs:
       - name: Install locked UI test dependencies
         working-directory: plugin
         run: make ui-install
+
+      - name: Check public SDK compatibility
+        working-directory: plugin
+        run: make sdk-check
 
       - name: Verify release identity and package
         id: verify

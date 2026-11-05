@@ -42,10 +42,10 @@ export function registerRejectedMinimumInstallTest(
 
       expect(response.ok()).toBe(false);
       expect(responseBody.error).toContain(
-        `requires kandev >= v0.88.0, running ${hostVersion}`,
+        `requires kandev >= v0.99.0, running ${hostVersion}`,
       );
       await expect(page.getByTestId("install-plugin-error")).toContainText(
-        "requires kandev >= v0.88.0",
+        "requires kandev >= v0.99.0",
       );
       await expect(page.getByTestId(`plugin-row-${pluginId}`)).toHaveCount(0);
     });
