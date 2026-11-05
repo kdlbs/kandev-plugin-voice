@@ -75,6 +75,20 @@ package_file=$(cd "$test_dir/matching-package" && make --no-print-directory -s p
 tar -czf "$test_dir/matching-package/$package_file" -C "$test_dir/matching-package/archive" manifest.yaml
 (cd "$test_dir/matching-package" && sh "$verify_script" "v$base_version" "$package_file")
 
+make_fixture rewritten-package
+mkdir -p "$test_dir/rewritten-package/archive"
+sed -E 's/^(version|min_kandev_version): "([^"]+)"$/\1: \2/' "$test_dir/rewritten-package/manifest.yaml" > "$test_dir/rewritten-package/archive/manifest.yaml"
+package_file=$(cd "$test_dir/rewritten-package" && make --no-print-directory -s package-file)
+tar -czf "$test_dir/rewritten-package/$package_file" -C "$test_dir/rewritten-package/archive" manifest.yaml
+(cd "$test_dir/rewritten-package" && sh "$verify_script" "v$base_version" "$package_file")
+
+make_fixture low-package-minimum
+mkdir -p "$test_dir/low-package-minimum/archive"
+sed 's/^min_kandev_version: .*/min_kandev_version: v0.98.9/' "$test_dir/low-package-minimum/manifest.yaml" > "$test_dir/low-package-minimum/archive/manifest.yaml"
+package_file=$(cd "$test_dir/low-package-minimum" && make --no-print-directory -s package-file)
+tar -czf "$test_dir/low-package-minimum/$package_file" -C "$test_dir/low-package-minimum/archive" manifest.yaml
+expect_failure 'an archive below the SDK host floor' "$test_dir/low-package-minimum" "v$base_version" "$package_file"
+
 make_fixture unprefixed-package-minimum
 mkdir -p "$test_dir/unprefixed-package-minimum/archive"
 set_manifest_minimum "$test_dir/unprefixed-package-minimum" 0.99.0

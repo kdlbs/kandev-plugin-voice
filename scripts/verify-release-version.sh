@@ -43,8 +43,8 @@ if [ "$#" -eq 2 ]; then
 	expected_package=$(make --no-print-directory -s package-file)
 	[ -f "$package_file" ] || fail "package file not found: $package_file"
 	[ "$(basename "$package_file")" = "$expected_package" ] || fail "package filename $(basename "$package_file") differs from $expected_package"
-	package_manifest=$(tar -xOzf "$package_file" manifest.yaml | sed -nE 's/^version: "([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p')
+	package_manifest=$(tar -xOzf "$package_file" manifest.yaml | sed -nE 's/^version: "?([0-9]+\.[0-9]+\.[0-9]+)"?$/\1/p')
 	[ "$package_manifest" = "$tag_version" ] || fail "package manifest version ${package_manifest:-missing} differs from tag $tag"
-	package_minimum_declared=$(tar -xOzf "$package_file" manifest.yaml | sed -nE 's/^min_kandev_version: "(v?[0-9]+\.[0-9]+\.[0-9]+)"$/\1/p')
+	package_minimum_declared=$(tar -xOzf "$package_file" manifest.yaml | sed -nE 's/^min_kandev_version: "?(v?[0-9]+\.[0-9]+\.[0-9]+)"?$/\1/p')
 	check_minimum_kandev_version "$package_minimum_declared" 'package manifest'
 fi
