@@ -15,8 +15,8 @@ check_minimum_kandev_version() {
 	esac
 	version=${declared#v}
 	printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || fail "$source min_kandev_version is not a release version: $declared"
-	satisfies_floor=$(printf '%s\n' "$version" | awk -F. '{ if (($1 + 0) > 0 || (($1 + 0) == 0 && ($2 + 0) >= 88)) print "yes"; else print "no" }')
-	[ "$satisfies_floor" = yes ] || fail "$source min_kandev_version must be at least v0.88.0 (found $declared)"
+	satisfies_floor=$(printf '%s\n' "$version" | awk -F. '{ if (($1 + 0) > 0 || (($1 + 0) == 0 && ($2 + 0) >= 99)) print "yes"; else print "no" }')
+	[ "$satisfies_floor" = yes ] || fail "$source min_kandev_version must be at least v0.99.0 (found $declared)"
 }
 
 if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
