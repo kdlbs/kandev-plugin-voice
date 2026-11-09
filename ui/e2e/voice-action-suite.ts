@@ -460,6 +460,21 @@ function registerVoiceActionTests(test: any, expect: any) {
     }: any, testInfo: any) => {
       const page = selectProjectPage(testPage, voiceMobilePage, testInfo);
       await installVoice(page, apiClient);
+      await page.goto(`/settings/plugins/${PLUGIN_ID}`);
+      await expect(page.getByTestId("voice-plugin-settings")).toBeVisible();
+      const enabled = page.getByTestId("voice-plugin-enabled");
+      await expect(enabled).toBeChecked();
+      await enabled.click();
+      await expect.poll(async () => {
+        const saved = await apiClient.rawRequest("GET", SETTINGS_PATH);
+        return (await saved.json()).value.enabled;
+      }).toBe(false);
+      await enabled.click();
+      await expect.poll(async () => {
+        const saved = await apiClient.rawRequest("GET", SETTINGS_PATH);
+        return (await saved.json()).value.enabled;
+      }).toBe(true);
+
       const webhookPath = `/api/plugins/${PLUGIN_ID}/webhooks/transcribe`;
       const probe = await apiClient.rawRequest("POST", webhookPath);
       expect(probe.status).toBe(503);

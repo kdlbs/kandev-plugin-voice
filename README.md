@@ -185,12 +185,21 @@ export KANDEV_E2E_BIN=/path/to/disposable/runtime/bin/kandev
 export VOICE_TMPDIR="$(mktemp -d /tmp/voice-v099.XXXXXX)"
 export VOICE_PACKAGE_PATH="$PWD/$(make -s package-file)"
 export VOICE_EXPECT_HOST_VERSION=v0.99.0
-VOICE_HOST_VARIANT=modern ui/e2e/run-host-smoke.sh
+mkdir -p "$VOICE_TMPDIR/home" "$VOICE_TMPDIR/config" "$VOICE_TMPDIR/data" "$VOICE_TMPDIR/cache"
+env -i PATH="$PATH" HOME="$VOICE_TMPDIR/home" \
+  XDG_CONFIG_HOME="$VOICE_TMPDIR/config" XDG_DATA_HOME="$VOICE_TMPDIR/data" \
+  XDG_CACHE_HOME="$VOICE_TMPDIR/cache" TMPDIR="$VOICE_TMPDIR" \
+  PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" \
+  KANDEV_HOST_ROOT="$KANDEV_HOST_ROOT" KANDEV_E2E_BIN="$KANDEV_E2E_BIN" \
+  KANDEV_SERVER_HOST=127.0.0.1 VOICE_TMPDIR="$VOICE_TMPDIR" \
+  VOICE_PACKAGE_PATH="$VOICE_PACKAGE_PATH" VOICE_EXPECT_HOST_VERSION=v0.99.0 \
+  VOICE_HOST_VARIANT=modern ui/e2e/run-host-smoke.sh
 ```
 
 Set `KANDEV_HOST_ROOT` to the matching release-source checkout. The runner
 stages its mock-agent fixture beside the disposable runtime, and verifies the
-runtime version through `/health`. Keep `VOICE_TMPDIR` outside
+runtime version through `/health`. The clean child environment prevents inherited
+launcher/version overrides from selecting another host. Keep `VOICE_TMPDIR` outside
 `~/.kandev/tasks`, which the host excludes from task repositories. The retained
 legacy and below-minimum fixtures are diagnostic paths; the migrated package
 requires v0.99.0 and must not be installed on the former v0.88.0 minimum.
