@@ -12,6 +12,9 @@ importers:
         specifier: ^4.2.0
         version: 4.2.0
     devDependencies:
+      '@kdlbs/plugin-sdk':
+        specifier: 0.1.0
+        version: 0.1.0
       '@testing-library/react':
         specifier: 16.3.0
         version: 16.3.0(@testing-library/dom@10.4.2)(@types/react@19.2.18)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -435,6 +438,9 @@ packages:
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
+
+  '@kdlbs/plugin-sdk@0.1.0':
+    resolution: {integrity: sha512-bQjlu+Q7GMQNuts98b5p6CPDOWCchxdq5VlQCwO5FunsEUuaKl/e1i+KJnVK2bvm9FgxuZLMt6W50KPdSA33vw==}
 
   '@oxc-project/types@0.143.0':
     resolution: {integrity: sha512-u6JZdLBTLotrNC9Vd6vPssINdzcCzleKAH6EJKImQb7GtYvX5keN2dxkoK44stCc4tffE6QQRtZTXVSzsLUlWA==}
@@ -1465,6 +1471,8 @@ snapshots:
     optional: true
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
+
+  '@kdlbs/plugin-sdk@0.1.0': {}
 
   '@oxc-project/types@0.143.0': {}
 

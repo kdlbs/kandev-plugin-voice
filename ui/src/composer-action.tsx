@@ -11,7 +11,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { IconLoader, IconMicrophone, IconPlayerStopFilled } from "./icons";
 import { host, type PluginComposerSlotProps } from "./host";
 import { registerAction } from "./active-action";
-import type { PluginActionElement, PluginActionProps } from "@kandev/plugin-sdk";
+import type { PluginActionElement, PluginActionProps } from "@kdlbs/plugin-sdk";
 import { useDictation, useIsCoarsePointer, useVoiceSettings } from "./use-dictation";
 import { whisperModelConfig } from "./models";
 import { t, type StringKey } from "./strings";

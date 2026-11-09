@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 const PLUGIN_ID = "kandev-plugin-voice";
 const SETTINGS_PATH = `/api/plugins/${PLUGIN_ID}/user-state/instance/global/voice-mode`;
 const PACKAGE_PATH = process.env.VOICE_PACKAGE_PATH;
@@ -450,6 +451,75 @@ function registerVoiceActionTests(test: any, expect: any) {
         await expect(editor).toContainText(`VOICE ${surface} RESULT`);
       }
     }
+
+    test("relays transcription through the SDK subprocess and preserves settings across restart", async ({
+      testPage,
+      voiceMobilePage,
+      apiClient,
+      backend,
+    }: any, testInfo: any) => {
+      const page = selectProjectPage(testPage, voiceMobilePage, testInfo);
+      await installVoice(page, apiClient);
+      await page.goto(`/settings/plugins/${PLUGIN_ID}`);
+      await expect(page.getByTestId("voice-plugin-settings")).toBeVisible();
+      const enabled = page.getByTestId("voice-plugin-enabled");
+      await expect(enabled).toBeChecked();
+      await enabled.click();
+      await expect.poll(async () => {
+        const saved = await apiClient.rawRequest("GET", SETTINGS_PATH);
+        return (await saved.json()).value.enabled;
+      }).toBe(false);
+      await enabled.click();
+      await expect.poll(async () => {
+        const saved = await apiClient.rawRequest("GET", SETTINGS_PATH);
+        return (await saved.json()).value.enabled;
+      }).toBe(true);
+
+      const webhookPath = `/api/plugins/${PLUGIN_ID}/webhooks/transcribe`;
+      const probe = await apiClient.rawRequest("POST", webhookPath);
+      expect(probe.status).toBe(503);
+      expect(await probe.json()).toEqual({ error: "voice transcription is not configured" });
+      expect((await apiClient.rawRequest("GET", webhookPath)).status).toBe(405);
+
+      let receivedAuthorization: string | undefined;
+      let receivedBody = "";
+      const upstream = createServer(async (request, response) => {
+        receivedAuthorization = request.headers.authorization;
+        for await (const chunk of request) receivedBody += chunk.toString();
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ text: "SDK relay smoke transcript" }));
+      });
+      await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+      try {
+        const address = upstream.address() as { port: number };
+        const config = await apiClient.rawRequest("PATCH", `/api/plugins/${PLUGIN_ID}`, {
+          config: {
+            openai_api_key: "voice-smoke-fixture-key",
+            openai_base_url: `http://127.0.0.1:${address.port}/transcriptions`,
+          },
+        });
+        expect(config.ok).toBe(true);
+        await expect.poll(async () => (await apiClient.rawRequest("POST", webhookPath)).status).toBe(400);
+        const masked = await apiClient.rawRequest("GET", `/api/plugins/${PLUGIN_ID}/config`);
+        expect(await masked.text()).not.toContain("voice-smoke-fixture-key");
+
+        const audio = new FormData();
+        audio.append("audio", new Blob(["fixture audio"], { type: "audio/wav" }), "smoke.wav");
+        const transcript = await fetch(`${backend.baseUrl}${webhookPath}`, { method: "POST", body: audio });
+        expect(transcript.status).toBe(200);
+        expect(await transcript.json()).toEqual({ text: "SDK relay smoke transcript" });
+        expect(receivedAuthorization).toBe("Bearer voice-smoke-fixture-key");
+        expect(receivedBody).toContain("smoke.wav");
+
+        expect((await apiClient.rawRequest("POST", `/api/plugins/${PLUGIN_ID}/disable`)).ok).toBe(true);
+        expect((await apiClient.rawRequest("POST", `/api/plugins/${PLUGIN_ID}/enable`)).ok).toBe(true);
+        const saved = await apiClient.rawRequest("GET", SETTINGS_PATH);
+        expect((await saved.json()).value).toMatchObject(webSpeechSettings);
+        await expect.poll(async () => (await apiClient.rawRequest("POST", webhookPath)).status).toBe(400);
+      } finally {
+        await new Promise<void>((resolve, reject) => upstream.close((error) => error ? reject(error) : resolve()));
+      }
+    });
 
     test("uses one correctly sized action in task chat, Quick Chat, task creation, and new-session", async ({
       testPage,

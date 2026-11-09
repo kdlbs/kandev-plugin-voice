@@ -15,8 +15,8 @@ check_minimum_kandev_version() {
 	esac
 	version=${declared#v}
 	printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || fail "$source min_kandev_version is not a release version: $declared"
-	satisfies_floor=$(printf '%s\n' "$version" | awk -F. '{ if (($1 + 0) > 0 || (($1 + 0) == 0 && ($2 + 0) >= 88)) print "yes"; else print "no" }')
-	[ "$satisfies_floor" = yes ] || fail "$source min_kandev_version must be at least v0.88.0 (found $declared)"
+	satisfies_floor=$(printf '%s\n' "$version" | awk -F. '{ if (($1 + 0) > 0 || (($1 + 0) == 0 && ($2 + 0) >= 99)) print "yes"; else print "no" }')
+	[ "$satisfies_floor" = yes ] || fail "$source min_kandev_version must be at least v0.99.0 (found $declared)"
 }
 
 if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
@@ -43,8 +43,8 @@ if [ "$#" -eq 2 ]; then
 	expected_package=$(make --no-print-directory -s package-file)
 	[ -f "$package_file" ] || fail "package file not found: $package_file"
 	[ "$(basename "$package_file")" = "$expected_package" ] || fail "package filename $(basename "$package_file") differs from $expected_package"
-	package_manifest=$(tar -xOzf "$package_file" manifest.yaml | sed -nE 's/^version: "([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p')
+	package_manifest=$(tar -xOzf "$package_file" manifest.yaml | sed -nE 's/^version: "?([0-9]+\.[0-9]+\.[0-9]+)"?$/\1/p')
 	[ "$package_manifest" = "$tag_version" ] || fail "package manifest version ${package_manifest:-missing} differs from tag $tag"
-	package_minimum_declared=$(tar -xOzf "$package_file" manifest.yaml | sed -nE 's/^min_kandev_version: "(v?[0-9]+\.[0-9]+\.[0-9]+)"$/\1/p')
+	package_minimum_declared=$(tar -xOzf "$package_file" manifest.yaml | sed -nE 's/^min_kandev_version: "?(v?[0-9]+\.[0-9]+\.[0-9]+)"?$/\1/p')
 	check_minimum_kandev_version "$package_minimum_declared" 'package manifest'
 fi

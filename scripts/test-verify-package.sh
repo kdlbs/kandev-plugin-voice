@@ -82,7 +82,26 @@ for executable in "$host_fixture"/server/*; do
 	[ "$executable" = "$host_fixture/$host_executable" ] || rm "$executable"
 done
 write_checksums "$host_fixture"
-sh "$verify_script" "$host_fixture" host "$host_platform" >/dev/null
+expect_failure 'host package declaring missing platforms' "$host_fixture" host "$host_platform"
+
+# Current plugin-pack rewrites host-only manifests with only the host platform,
+# four-space YAML nesting and unquoted scalar paths.
+copy_fixture host-rewritten
+rewritten_fixture=$test_dir/host-rewritten
+cat > "$rewritten_fixture/manifest.yaml" <<EOF
+api_version: 1
+runtime:
+    type: binary
+    executables:
+        $host_platform: $host_executable
+min_kandev_version: v0.99.0
+EOF
+for executable in "$rewritten_fixture"/server/*; do
+	[ "$executable" = "$rewritten_fixture/$host_executable" ] || rm "$executable"
+done
+write_checksums "$rewritten_fixture"
+sh "$verify_script" "$rewritten_fixture" host "$host_platform" >/dev/null
+expect_failure 'a host-only manifest used as a full package' "$rewritten_fixture"
 
 for required in manifest.yaml ui/bundle.js ui/whisper-worker.js ui/plugin.css \
 	server/plugin-linux-amd64 server/plugin-linux-arm64 \

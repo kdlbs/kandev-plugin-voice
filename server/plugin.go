@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/kandev/kandev/pkg/pluginsdk"
+	"github.com/kdlbs/kandev/pluginsdk"
 )
 
 // audioFormField is the multipart field the UI uploads the recording under.

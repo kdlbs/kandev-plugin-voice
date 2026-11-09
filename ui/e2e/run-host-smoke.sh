@@ -29,7 +29,7 @@ case "$VARIANT" in
     ;;
 esac
 
-PACKAGE_PATH=${VOICE_PACKAGE_PATH:-"$PLUGIN_ROOT/kandev-plugin-voice-0.1.1.tar.gz"}
+PACKAGE_PATH=${VOICE_PACKAGE_PATH:-"$PLUGIN_ROOT/$(make -s --no-print-directory -C "$PLUGIN_ROOT" package-file)"}
 HOST_BACKEND=${KANDEV_E2E_BIN:-"$HOST_ROOT/apps/backend/bin/kandev"}
 if [ ! -x "$HOST_BACKEND" ]; then
   echo "Missing host backend: $HOST_BACKEND" >&2

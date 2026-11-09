@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/kandev/kandev/pkg/pluginsdk"
+	"github.com/kdlbs/kandev/pluginsdk"
 )
 
 // fakeHost is an in-memory pluginsdk.Host double. Voice Mode only ever calls
